@@ -22,7 +22,7 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 
 1. Select the RunPod Fast Stable Diffusion Image from Runpod Templates and Deploy it.
 
-2. Make adjustments to your Disk Volume if required from **Customize Deployment**.
+2. Adjust your Disk Volume if required from **Customize Deployment**.
 
 ![Select RunPod Fast Stable Diffusion Image on runpod](<src/common/RunpodImageSelection.png>)
 
@@ -34,7 +34,7 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 4. Open a terminal from launcher. Clone this repo using
 
 ```sh
-git clone deepratnaawale/CivitAIBatchModelDownloader
+git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 ```
 5. Copy the contents of downloaded repo to the main folder. Use the following p
 
