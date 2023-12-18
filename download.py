@@ -16,10 +16,6 @@ subprocess.check_call([sys.executable, "-m", "pip", "install", "parfive"])
 import parfive
 from parfive import Downloader
 
-# Constants
-CWD = Path.cwd()
-
-
 def get_model_types(path):
     files = path.glob("*.csv")
     model_types = [path.stem for path in files if path.is_file()]
@@ -33,7 +29,7 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
 def load_model(model_type):
     csv_path = Path(Path.cwd(), "CSVs", model_type + ".csv")
 
-    main_path = Path(Path.cwd(), "sd", "stable-diffusion-web-ui")
+    main_path = Path(Path.cwd().parent().absolute(), "sd", "stable-diffusion-web-ui")
 
     model_path = {
         "checkpoint": Path("models", "Stable-diffusion"),
@@ -52,15 +48,18 @@ def load_model(model_type):
         ),
         "motionmodule": Path(r"extensions\sd-webui-animatediff\model"),
     }
+
     try:
         sub_dir = model_path[model_type]
     except KeyError:
         sub_dir = model_path["other"]
 
     download_path = Path(main_path, sub_dir)
+    Path(download_path).mkdir(parents=True, exist_ok=True)
+    
     if not is_non_zero_file(csv_path):
         print("File Empty!")
-        return
+        return []
 
     model_names = []
     model_urls = []
@@ -73,18 +72,18 @@ def load_model(model_type):
             model_names.append(model_name)
             model_urls.append(url)
 
-    downloaderObj = Downloader()
+        downloaderObj = Downloader()
 
-    for model_name, url in zip(model_names, model_urls):
-        downloaderObj.enqueue_file(url, download_path)
+        for model_name, url in zip(model_names, model_urls):
+            downloaderObj.enqueue_file(url, download_path)
 
-    downloads = downloaderObj.download()
+        downloads = downloaderObj.download()
 
     return downloads
 
 
 def main():
-    csv_path = Path(Path.cwd(), "CSVs")
+    csv_path = Path(Path.cwd().parent().absolute(), "CSVs")
     models = get_model_types(csv_path)
 
     for model_type in models:

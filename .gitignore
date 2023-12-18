@@ -1,8 +1,12 @@
 #custom
-local-config.ini
+
 # CSVs/*.csv
+local-config.ini
+config.ini
 test.py
+OneClickRun.ipynb
 !CSVs/template.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
