@@ -11,10 +11,16 @@ from functools import partial
 from io import BytesIO
 import subprocess
 
+
+ROOT_DIR = pathlib.Path(__file__).parent.resolve()
+print(ROOT_DIR)
+
 # implement pip as a subprocess:
 subprocess.check_call([sys.executable, "-m", "pip", "install", "parfive"])
+
 import parfive
 from parfive import Downloader
+
 
 def get_model_types(path):
     files = path.glob("*.csv")
@@ -27,9 +33,8 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
 
 
 def load_model(model_type):
-    csv_path = Path(Path.cwd(), "CSVs", model_type + ".csv")
-
-    main_path = Path(Path.cwd().parent().absolute(), "sd", "stable-diffusion-web-ui")
+    csv_path = Path(ROOT_DIR, "CSVs", model_type + ".csv")
+    main_path = Path(ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui")
 
     model_path = {
         "checkpoint": Path("models", "Stable-diffusion"),
@@ -43,10 +48,8 @@ def load_model(model_type):
         "other": Path("models", "Other"),
         "textualinversion": Path("Embeddings"),
         "upscaler": Path("models", "ESRGAN"),
-        "aestheticgradient": Path(
-            r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"
-        ),
-        "motionmodule": Path(r"extensions\sd-webui-animatediff\model"),
+        "aestheticgradient": Path(r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
+        "motionmodule": Path(r"extensions\sd-webui-animatediff\model")
     }
 
     try:
@@ -55,8 +58,9 @@ def load_model(model_type):
         sub_dir = model_path["other"]
 
     download_path = Path(main_path, sub_dir)
+
     Path(download_path).mkdir(parents=True, exist_ok=True)
-    
+
     if not is_non_zero_file(csv_path):
         print("File Empty!")
         return []
@@ -83,7 +87,7 @@ def load_model(model_type):
 
 
 def main():
-    csv_path = Path(Path.cwd().parent().absolute(), "CSVs")
+    csv_path = Path(ROOT_DIR.absolute(), "CSVs")
     models = get_model_types(csv_path)
 
     for model_type in models:
