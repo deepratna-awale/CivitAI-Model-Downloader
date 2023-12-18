@@ -28,7 +28,7 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 4. Open a terminal from launcher. Clone this repo and copy the contents of downloaded repo to the main folder.
 
 ```sh
-git clone deepratnaawale/CivitAIBatchModelDownloader && cp -vaR CivitAIBatchModelDownloader/.. && rmdir CivitAIBatchModelDownloader/
+git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git && cp -vaR CivitAIBatchModelDownloader/.. && rmdir CivitAIBatchModelDownloader/
 ```
 
 5. Open [OneClickRun.ipynp](OneClickRun.ipynb) and run ONLY the 1st cell.
@@ -47,30 +47,26 @@ python download.py
 1. Open a terminal from launcher. Clone this repo using
 
 ```sh
-git clone deepratnaawale/CivitAIBatchModelDownloader
+git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 ```
 
-2. Use downloader to download files from the csvs. Please read the Tweaks section!
+> [!WARNING]
+>  If you want to use the downloader locally, you need to change the following:
+1. Open `download.py` and search for `main_path` and change that line to:
+
+```python
+main_path = Path("path/containing/stablediffusion/")
+```
+Please replace the path in quotes with actual directory of `Stable Diffusion`.
+Please note that the `SD Directory` is the one with `webui.py` in it.
+
+1. Use downloader to download files from the csvs. Please read the Tweaks section!
 ```sh
 python download.py 
 ```
 
 
 # Tweaks
-> [!WARNING]
->  If you want to use the downloader locally, you need to change the following:
-1. Open `download.py` and search for `main_path` and change that line to:
-
-```python
-main_path = Path("path/containing/stable-diffusion-web-ui")
-```
-
-Please replace the path in quotes with actual directory of `Stable Diffusion`.
-
- 
-Please note that the `SD Directory` is the one with `webui.py` in it.
-
-
 
 1. If needed, you can edit the default paths in the `download.py` file.
    
