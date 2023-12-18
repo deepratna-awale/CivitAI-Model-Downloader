@@ -12,12 +12,13 @@ from io import BytesIO
 import subprocess
 
 # implement pip as a subprocess:
-subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'parfive'])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "parfive"])
 import parfive
 from parfive import Downloader
 
 # Constants
 CWD = Path.cwd()
+
 
 def get_model_types(path):
     files = path.glob("*.csv")
@@ -32,29 +33,30 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
 def load_model(model_type):
     csv_path = Path(Path.cwd(), "CSVs", model_type + ".csv")
 
-    main_path = Path(Path.cwd(), "sd")
+    main_path = Path(Path.cwd(), "sd", "stable-diffusion-web-ui")
 
     model_path = {
-        "checkpoint": Path("stable-diffusion-webui", "models", "Stable-diffusion"),
-        "lora": Path("stable-diffusion-webui", "models", "Lora"),
-        "locon": Path("stable-diffusion-webui", "models", "Lora"),
-        "lycoris": Path("stable-diffusion-webui", "models", "Lora"),
-        "controlnet": Path("stable-diffusion-webui", "models", "ControlNet"),
-        "hypernetwork": Path("stable-diffusion-webui", "models", "hypernetworks"),
-        "vae": Path("stable-diffusion-webui", "models", "VAE"),
-        "poses": Path("stable-diffusion-webui", "models", "Poses"),
-        "other": Path("stable-diffusion-webui", "models", "Other"),
-        "textualinversion": Path("stable-diffusion-webui", "Embeddings"),
-        "upscaler": Path("stable-diffusion-webui", "models", "ESRGAN"),
-        "aestheticgradient": Path("stable-diffusion-webui", r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
-        "motionmodule": Path("stable-diffusion-webui", r"extensions\sd-webui-animatediff\model")
-        
+        "checkpoint": Path("models", "Stable-diffusion"),
+        "lora": Path("models", "Lora"),
+        "locon": Path("models", "Lora"),
+        "lycoris": Path("models", "Lora"),
+        "controlnet": Path("models", "ControlNet"),
+        "hypernetwork": Path("models", "hypernetworks"),
+        "vae": Path("models", "VAE"),
+        "poses": Path("models", "Poses"),
+        "other": Path("models", "Other"),
+        "textualinversion": Path("Embeddings"),
+        "upscaler": Path("models", "ESRGAN"),
+        "aestheticgradient": Path(
+            r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"
+        ),
+        "motionmodule": Path(r"extensions\sd-webui-animatediff\model"),
     }
     try:
         sub_dir = model_path[model_type]
     except KeyError:
         sub_dir = model_path["other"]
-        
+
     download_path = Path(main_path, sub_dir)
     if not is_non_zero_file(csv_path):
         print("File Empty!")
@@ -88,7 +90,7 @@ def main():
     for model_type in models:
         print(f"Downloading {model_type.capitalize()} files.")
         downloads = load_model(model_type)
-        
+
         if downloads.errors:
             print("The following files failed.")
             print(downloads.errors)

@@ -15,7 +15,6 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 - [Parfive python library](https://pypi.org/project/parfive/) Automatically installed by `download.py`.
 
 
-
 # Installation
 
 ## I. On Runpod
@@ -26,31 +25,31 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 
 ![Select RunPod Fast Stable Diffusion Image on runpod](<src/common/RunpodImageSelection.png>)
 
-
 3. Connect to Jupyter Lab.
 
 ![Connect to Jupyter Lab](<src/common/ConnectToJupyterNotebook.png>)
 
-4. Open a terminal from launcher. Clone this repo using
+
+4. Open a terminal from launcher. Clone this repo and copy the contents of downloaded repo to the main folder.
 
 ```sh
-git clone deepratnaawale/CivitAIBatchModelDownloader
+git clone deepratnaawale/CivitAIBatchModelDownloader && cp -vaR CivitAIBatchModelDownloader/.. && rmdir CivitAIBatchModelDownloader/
 ```
-5. Copy the contents of downloaded repo to the main folder. Use the following p
+
+5. Copy the contents of downloaded repo to the main folder. Use the following:
 
 ```sh
-cp -vaR CivitAIBatchModelDownloader/.. && rmdir CivitAIBatchModelDownloader/
-```
 
-6. Use downloader to download files from the csvs.
+```
+6. Open [OneClickRun.ipynp](OneClickRun.ipynb) and run ONLY the 1st cell.
+
+7. Use downloader to download files from the csvs.
 ```sh
 python download.py
 ```
 
 > [!NOTE]
-> It will Automatically download content from every CSV in the [CSVs Directory](<CSVs/>) to the default location.
-
-
+> The Downloader will Automatically download content from every CSV in the [CSVs Directory](<CSVs/>) to the default download location.
 
 
 ## II. Local Install
@@ -61,28 +60,45 @@ python download.py
 git clone deepratnaawale/CivitAIBatchModelDownloader
 ```
 
-2. Use downloader to download files from the csvs.
+2. Use downloader to download files from the csvs. Please read the Tweaks section!
 ```sh
-python download.py
+python download.py 
 ```
 
-3. If needed, you can edit the default paths in the `download.py` file.
+
+# Tweaks
+> [!WARNING]
+>  If you want to use the downloader locally, you need to change the following:
+1. Open `download.py` and search for `main_path` and change that line to:
+
+```python
+main_path = Path("path/containing/stable-diffusion-web-ui")
+```
+
+Please replace the path in quotes with actual directory of `Stable Diffusion`.
+
+ 
+Please note that the `SD Directory` is the one with `webui.py` in it.
+
+
+
+1. If needed, you can edit the default paths in the `download.py` file.
    
 ```python
-model_path = {
-        "checkpoint": Path("stable-diffusion-webui", "models", "Stable-diffusion"),
-        "lora": Path("stable-diffusion-webui", "models", "Lora"),
-        "locon": Path("stable-diffusion-webui", "models", "Lora"),
-        "lycoris": Path("stable-diffusion-webui", "models", "Lora"),
-        "controlnet": Path("stable-diffusion-webui", "models", "ControlNet"),
-        "hypernetwork": Path("stable-diffusion-webui", "models", "hypernetworks"),
-        "vae": Path("stable-diffusion-webui", "models", "VAE"),
-        "poses": Path("stable-diffusion-webui", "models", "Poses"),
-        "other": Path("stable-diffusion-webui", "models", "Other"),
-        "textualinversion": Path("stable-diffusion-webui", "Embeddings"),
-        "upscaler": Path("stable-diffusion-webui", "models", "ESRGAN"),
-        "aestheticgradient": Path("stable-diffusion-webui", r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
-        "motionmodule": Path("stable-diffusion-webui", r"extensions\sd-webui-animatediff\model")
+    model_path = {
+        "checkpoint": Path("models", "Stable-diffusion"),
+        "lora": Path("models", "Lora"),
+        "locon": Path("models", "Lora"),
+        "lycoris": Path("models", "Lora"),
+        "controlnet": Path("models", "ControlNet"),
+        "hypernetwork": Path("models", "hypernetworks"),
+        "vae": Path("models", "VAE"),
+        "poses": Path("models", "Poses"),
+        "other": Path("models", "Other"),
+        "textualinversion": Path("Embeddings"),
+        "upscaler": Path("models", "ESRGAN"),
+        "aestheticgradient": Path(r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
+        "motionmodule": Path(r"extensions\sd-webui-animatediff\model")
         
     }
 ```
@@ -90,7 +106,7 @@ The format is
 ```python
 model_type: Path(path/to/download/model/to/)
 ```
-Don't forget to add the a `,` if your model isn't the last one.
+Don't forget to add the a `,` if your model isn't the last one. do not use plural in dict key, i.e. `lora` NOT `loras`, **lowercase necessary!**
 
 
 # CSV Structure

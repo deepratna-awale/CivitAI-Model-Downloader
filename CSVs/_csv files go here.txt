@@ -1,1 +1,1 @@
-This dir should have all the csv files extracted from info files after running GetCSVFromCivitAIinfoFiles.py
+This dir should have all the csv files. Format of CSVs is described in README.md
