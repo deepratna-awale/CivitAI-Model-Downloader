@@ -9,6 +9,10 @@ import sys
 from multiprocessing import Pool, cpu_count
 from functools import partial
 from io import BytesIO
+import subprocess
+
+# implement pip as a subprocess:
+subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'parfive'])
 import parfive
 from parfive import Downloader
 
@@ -28,7 +32,7 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
 def load_model(model_type):
     csv_path = Path(Path.cwd(), "CSVs", model_type + ".csv")
 
-    models_dir = Path(Path.cwd(), "sd")
+    main_path = Path(Path.cwd(), "sd")
 
     model_path = {
         "checkpoint": Path("stable-diffusion-webui", "models", "Stable-diffusion"),
@@ -43,12 +47,15 @@ def load_model(model_type):
         "textualinversion": Path("stable-diffusion-webui", "Embeddings"),
         "upscaler": Path("stable-diffusion-webui", "models", "ESRGAN"),
         "aestheticgradient": Path("stable-diffusion-webui", r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
-        "motionmodule": Path("stable-diffusion-webui", r"extensions\sd-webui-animatediff\model"),
-        
+        "motionmodule": Path("stable-diffusion-webui", r"extensions\sd-webui-animatediff\model")
         
     }
-
-    download_path = Path(models_dir, model_path[model_type])
+    try:
+        sub_dir = model_path[model_type]
+    except KeyError:
+        sub_dir = model_path["other"]
+        
+    download_path = Path(main_path, sub_dir)
     if not is_non_zero_file(csv_path):
         print("File Empty!")
         return
@@ -79,7 +86,7 @@ def main():
     models = get_model_types(csv_path)
 
     for model_type in models:
-        print(f"Downloading {model_type.capitalize()} models.")
+        print(f"Downloading {model_type.capitalize()} files.")
         downloads = load_model(model_type)
         
         if downloads.errors:
