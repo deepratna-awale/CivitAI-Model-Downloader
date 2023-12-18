@@ -1,11 +1,6 @@
 # CivitAI Batch Model Downloader
 The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Notebook[^1].
 
-> [!IMPORTANT]
-> Git is Required! Please install [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
-
-> [!NOTE]
-> If you are running this on Runpod, git should already  be installed!
 
 # Requirements
 - [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
