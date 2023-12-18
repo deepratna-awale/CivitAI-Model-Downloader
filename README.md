@@ -90,7 +90,7 @@ The format is
 ```python
 model_type: Path(path/to/download/model/to/)
 ```
-Don't forget to add the a `,` if your model isn't the last one.
+Don't forget to add a `,` if your model path isn't the last one.
 
 
 # CSV Structure
