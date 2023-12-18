@@ -21,23 +21,21 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 ![Select RunPod Fast Stable Diffusion Image on runpod](<src/common/RunpodImageSelection.png>)
 
 3. Connect to Jupyter Lab.
-
-![Connect to Jupyter Lab](<src/common/ConnectToJupyterNotebook.png>)
-
+<center>
+<img src="src/common/ConnectToJupyterNotebook.png" height="250" />
+</center>
 
 4. Open a terminal from launcher. Clone this repo and copy the contents of downloaded repo to the main folder.
 
 ```sh
 git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git 
 ```
-```sh
-mv CivitAIBatchModelDownloader/* ..
-```
-```sh
-rmdir CivitAIBatchModelDownloader/
-```
 
 5. Use downloader to download files from the csvs.
+```sh
+cd CivitAIBatchModelDownloader/
+```
+
 ```sh
 python download.py
 ```

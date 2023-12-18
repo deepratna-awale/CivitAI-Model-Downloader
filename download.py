@@ -79,7 +79,8 @@ def load_model(model_type):
         downloaderObj = Downloader()
 
         for model_name, url in zip(model_names, model_urls):
-            downloaderObj.enqueue_file(url, download_path)
+            if model_name and url:
+                downloaderObj.enqueue_file(url, download_path)
 
         downloads = downloaderObj.download()
 
