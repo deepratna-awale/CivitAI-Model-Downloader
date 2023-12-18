@@ -28,12 +28,16 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 4. Open a terminal from launcher. Clone this repo and copy the contents of downloaded repo to the main folder.
 
 ```sh
-git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git && mv CivitAIBatchModelDownloader/* .. && rmdir CivitAIBatchModelDownloader/
+git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git 
+```
+```sh
+mv CivitAIBatchModelDownloader/* ..
+```
+```sh
+rmdir CivitAIBatchModelDownloader/
 ```
 
-5. Open [OneClickRun.ipynp](OneClickRun.ipynb) and run ONLY the 1st cell.
-
-6. Use downloader to download files from the csvs.
+5. Use downloader to download files from the csvs.
 ```sh
 python download.py
 ```
