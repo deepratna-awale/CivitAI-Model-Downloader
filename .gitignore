@@ -1,3 +1,8 @@
+#custom
+local-config.ini
+# CSVs/*.csv
+test.py
+!CSVs/template.csv
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

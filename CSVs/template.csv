@@ -1,0 +1,2 @@
+SrNo, Model_ID, Model_Name, Model_URL (the download url with "/api/download") Ex:https://civitai.com/api/download/models/31531 and NOT: https://civitai.com/models/221152/legoworld
+Hint: You can use this tool to automatically create these CSV file: https://github.com/deepratnaawale/CivitAI-DownloadLink-Extractor/tree/main
