@@ -13,7 +13,8 @@ import subprocess
 
 
 ROOT_DIR = pathlib.Path(__file__).parent.resolve()
-print(ROOT_DIR)
+MAIN_PATH = Path(ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui")
+
 
 # implement pip as a subprocess:
 subprocess.check_call([sys.executable, "-m", "pip", "install", "parfive"])
@@ -34,7 +35,6 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
 
 def load_model(model_type):
     csv_path = Path(ROOT_DIR, "CSVs", model_type + ".csv")
-    main_path = Path(ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui")
 
     model_path = {
         "checkpoint": Path("models", "Stable-diffusion"),
@@ -48,8 +48,10 @@ def load_model(model_type):
         "other": Path("models", "Other"),
         "textualinversion": Path("Embeddings"),
         "upscaler": Path("models", "ESRGAN"),
-        "aestheticgradient": Path(r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"),
-        "motionmodule": Path(r"extensions\sd-webui-animatediff\model")
+        "aestheticgradient": Path(
+            r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"
+        ),
+        "motionmodule": Path(r"extensions\sd-webui-animatediff\model"),
     }
 
     try:
@@ -57,7 +59,7 @@ def load_model(model_type):
     except KeyError:
         sub_dir = model_path["other"]
 
-    download_path = Path(main_path, sub_dir)
+    download_path = Path(MAIN_PATH, sub_dir)
 
     Path(download_path).mkdir(parents=True, exist_ok=True)
 
@@ -90,6 +92,7 @@ def load_model(model_type):
 def main():
     csv_path = Path(ROOT_DIR.absolute(), "CSVs")
     models = get_model_types(csv_path)
+    models.remove("template")
 
     for model_type in models:
         print(f"Downloading {model_type.capitalize()} files.")

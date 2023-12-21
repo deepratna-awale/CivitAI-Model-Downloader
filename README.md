@@ -1,5 +1,5 @@
 # CivitAI Batch Model Downloader
-The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Notebook[^1].
+This simple python file lets you batch download CivitAI Models
 
 
 # Requirements
@@ -21,14 +21,12 @@ The base of the notebook is from @github/TheLastBen Stable Diffusion Runpod Note
 ![Select RunPod Fast Stable Diffusion Image on runpod](<src/common/RunpodImageSelection.png>)
 
 3. Connect to Jupyter Lab.
-<center>
-<img src="src/common/ConnectToJupyterNotebook.png" height="250" />
-</center>
+![Connect to Jupyter Lab Instance](<src/common/ConnectToJupyterNotebook.png>)
 
 4. Open a terminal from launcher. Clone this repo and copy the contents of downloaded repo to the main folder.
 
 ```sh
-git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git 
+git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 ```
 
 5. Use downloader to download files from the csvs.
@@ -54,7 +52,7 @@ git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 
 > [!WARNING]
 >  If you want to use the downloader locally, you need to change the following:
-1. Open `download.py` and search for `main_path` and change that line to:
+1. Open `download.py` and search for `MAIN_PATH` and change that line to:
 
 ```python
 main_path = Path("path/containing/stablediffusion/")
@@ -94,7 +92,7 @@ The format is
 ```python
 model_type: Path(path/to/download/model/to/)
 ```
-Don't forget to add the a `,` if your model isn't the last one. do not use plural in dict key, i.e. `lora` NOT `loras`, **lowercase necessary!**
+Don't forget to add the a `,` if your model isn't the last one. Do not use plural in dict key, i.e. `lora` NOT `loras`, **lowercase necessary!**
 
 
 # CSV Structure
@@ -110,6 +108,7 @@ Sr.no | Model ID| Model Name | Model URL
 1 | 4201 | Realistic Vision V4.0 | https://civitai.com/api/download/models/114367
 2 | ... | ... | ... 
 3 | ... | ... | ... 
+
 
 > [!HINT]
 > You can automatically create these CSVs using my [CivitAI-DownloadLink-Extractor](https://github.com/deepratnaawale/CivitAI-DownloadLink-Extractor) repository.
