@@ -10,14 +10,15 @@ from multiprocessing import Pool, cpu_count
 from functools import partial
 from io import BytesIO
 import subprocess
+import os
 
 
 ROOT_DIR = pathlib.Path(__file__).parent.resolve()
-MAIN_PATH = Path(ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui")
 
 
 # implement pip as a subprocess:
 subprocess.check_call([sys.executable, "-m", "pip", "install", "parfive"])
+os.system("cls" if os.name == "nt" else "clear")
 
 import parfive
 from parfive import Downloader
@@ -33,7 +34,7 @@ def is_non_zero_file(fpath):  # check if file exists and if it exists check is i
     return fpath.is_file() and fpath.stat().st_size > 0
 
 
-def load_model(model_type):
+def download_models(model_type, main_path):
     csv_path = Path(ROOT_DIR, "CSVs", model_type + ".csv")
 
     model_path = {
@@ -59,7 +60,7 @@ def load_model(model_type):
     except KeyError:
         sub_dir = model_path["other"]
 
-    download_path = Path(MAIN_PATH, sub_dir)
+    download_path = Path(main_path, sub_dir)
 
     Path(download_path).mkdir(parents=True, exist_ok=True)
 
@@ -94,13 +95,54 @@ def main():
     models = get_model_types(csv_path)
     models.remove("template")
 
-    for model_type in models:
-        print(f"Downloading {model_type.capitalize()} files.")
-        downloads = load_model(model_type)
+    choice = int(
+        input(
+            "Is this Runpod or Other/Local system?\n\
+        [1] Runpod\n\
+        [2] Other/Local System\n>"
+        )
+    )
 
-        if downloads.errors:
-            print("The following files failed.")
-            print(downloads.errors)
+    match choice:
+        case 1:
+            MAIN_PATH = Path(
+                ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui"
+            ).resolve()
+
+            if Path(MAIN_PATH, "webui.py").is_file():
+                print("Found Stable Diffusion Directory")
+                for model_type in models:
+                    print(f"Downloading {model_type.capitalize()} files.")
+                    downloads = download_models(model_type, MAIN_PATH)
+
+                    if downloads.errors:
+                        print("The following files failed.")
+                        print(downloads.errors)
+            else:
+                print(
+                    "Invalid Path. The stable diffusion base directory must contain 'webui.py' to be accepted."
+                )
+
+        case 2:
+            MAIN_PATH = Path(input("Input your Stable Diffusion Path: "))
+
+            if Path(MAIN_PATH, "webui.py").is_file():
+                print("Path Accepted.")
+                for model_type in models:
+                    print(f"Downloading {model_type.capitalize()} files.")
+                    downloads = download_models(model_type, MAIN_PATH)
+
+                    if downloads.errors:
+                        print("The following files failed.")
+                        print(downloads.errors)
+            else:
+                print(
+                    "Invalid Path. The stable diffusion base directory must contain 'webui.py' to be accepted."
+                )
+
+        case _:
+            print("Invalid Option.")
+            input("Please rerun the script.\n Press Return to exit.")
 
 
 if __name__ == "__main__":

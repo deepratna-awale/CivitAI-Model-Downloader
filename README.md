@@ -28,19 +28,7 @@ This simple python file lets you batch download CivitAI Models
 ```sh
 git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 ```
-
-5. Use downloader to download files from the csvs.
-```sh
-cd CivitAIBatchModelDownloader/
-```
-
-```sh
-python download.py
-```
-
-> [!NOTE]
-> The Downloader will Automatically download content from every CSV in the [CSVs Directory](<CSVs/>) to the default download location.
-
+5. Done!
 
 ## II. Local Install
 
@@ -49,21 +37,23 @@ python download.py
 ```sh
 git clone https://github.com/deepratnaawale/CivitAIBatchModelDownloader.git
 ```
+2. Done!
 
-> [!WARNING]
->  If you want to use the downloader locally, you need to change the following:
-1. Open `download.py` and search for `MAIN_PATH` and change that line to:
 
-```python
-main_path = Path("path/containing/stablediffusion/")
-```
-Please replace the path in quotes with actual directory of `Stable Diffusion`.
-Please note that the `SD Directory` is the one with `webui.py` in it.
+# Using the Downloader
+> [!NOTE]
+> The Downloader will Automatically download content from every CSV in the [CSVs Directory](<CSVs/>) to the default download location.
 
-1. Use downloader to download files from the csvs. Please read the Tweaks section!
+1. Goto CivitAIBatchModelDownloader directory 
 ```sh
-python download.py 
+cd CivitAIBatchModelDownloader/
 ```
+
+2. Use downloader to download files from the csvs by typing the following in the terminal.
+```sh
+python download.py
+```
+3. Choose the option you want to use: 1 for Runpod, and 2 for any other systems. DO NOT TYPE THE BRACKETS, just the number.
 
 
 # Tweaks
@@ -113,7 +103,3 @@ Sr.no | Model ID| Model Name | Model URL
 > [!HINT]
 > You can automatically create these CSVs using my [CivitAI-DownloadLink-Extractor](https://github.com/deepratnaawale/CivitAI-DownloadLink-Extractor) repository.
 
-
-# Credits
-
-[^1]: [The Last Ben Fast Stable Diffusion Runpod](https://github.com/TheLastBen/fast-stable-diffusion)
