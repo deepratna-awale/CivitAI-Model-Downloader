@@ -1,6 +1,6 @@
 #custom
 
-# CSVs/*.csv
+CSVs/*.csv
 local-config.ini
 config.ini
 test.py

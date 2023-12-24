@@ -106,7 +106,7 @@ def main():
     match choice:
         case 1:
             MAIN_PATH = Path(
-                ROOT_DIR.absolute(), "sd", "stable-diffusion-web-ui"
+                ROOT_DIR.parent.absolute(), "sd", "stable-diffusion-webui"
             ).resolve()
 
             if Path(MAIN_PATH, "webui.py").is_file():
