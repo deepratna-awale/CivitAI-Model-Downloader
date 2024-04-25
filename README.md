@@ -1,6 +1,5 @@
 # CivitAI Batch Model Downloader
-This simple python file lets you batch download CivitAI Models
-
+One click Multi-thread download solution for all Civit-Ai models.
 
 # Requirements
 - [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
