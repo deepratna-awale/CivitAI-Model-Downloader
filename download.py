@@ -46,13 +46,13 @@ def download_models(model_type, main_path):
         "hypernetwork": Path("models", "hypernetworks"),
         "vae": Path("models", "VAE"),
         "poses": Path("models", "Poses"),
-        "other": Path("models", "Other"),
         "textualinversion": Path("Embeddings"),
         "upscaler": Path("models", "ESRGAN"),
         "aestheticgradient": Path(
             r"extensions\stable-diffusion-webui-aesthetic-gradients\aesthetic_embeddings"
         ),
         "motionmodule": Path(r"extensions\sd-webui-animatediff\model"),
+        "other": Path("models", "Other"),
     }
 
     try:
