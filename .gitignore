@@ -6,6 +6,7 @@ config.ini
 test.py
 OneClickRun.ipynb
 !CSVs/template.csv
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,25 @@
+{
+    "civitai_api_key": "c94ecd6169534e57e33cfdcd7b397c14",
+    "csvs_directory": "CSVs",
+    "model_paths": {
+        "checkpoint": "models/Stable-diffusion",
+        "lora": "models/Lora",
+        "locon": "models/Lora",
+        "lycoris": "models/Lora",
+        "controlnet": "models/ControlNet",
+        "hypernetwork": "models/hypernetworks",
+        "vae": "models/VAE",
+        "poses": "models/Poses",
+        "textualinversion": "Embeddings",
+        "upscaler": "models/ESRGAN",
+        "aestheticgradient": "extensions/stable-diffusion-webui-aesthetic-gradients/aesthetic_embeddings",
+        "motionmodule": "extensions/sd-webui-animatediff/model",
+        "other": "models/Other"
+    },
+    "download_settings": {
+        "max_concurrent_downloads": 4,
+        "timeout": 30,
+        "retry_attempts": 3,
+        "skip_existing_files": true
+    }
+}
