@@ -1,5 +1,5 @@
 {
-    "civitai_api_key": "c94ecd6169534e57e33cfdcd7b397c14",
+    "civitai_api_key": "your-api-key",
     "csvs_directory": "CSVs",
     "model_paths": {
         "checkpoint": "models/Stable-diffusion",
