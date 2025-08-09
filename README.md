@@ -276,9 +276,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/deepratnaawale/CivitAI-Model-Downloader/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/deepratnaawale/CivitAI-Model-Downloader/discussions)
-- **Documentation**: See [PYTEST_IMPLEMENTATION_SUMMARY.md](PYTEST_IMPLEMENTATION_SUMMARY.md) for testing details
-
 ---
 
 ⭐ **Star this repository if you find it useful!**
