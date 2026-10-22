@@ -145,6 +145,19 @@ Examples:
     )
     
     parser.add_argument(
+        "--no-aria2",
+        action="store_true",
+        help="Use the built-in downloader even when aria2c is installed"
+    )
+    
+    parser.add_argument(
+        "--connections",
+        type=int,
+        metavar="N",
+        help="Connections per file when downloading with aria2c (1-16, default 16)"
+    )
+    
+    parser.add_argument(
         "--verify",
         action="store_true",
         help="Check each file's SHA256 against CivitAI, both for new downloads and before "
@@ -480,6 +493,10 @@ class CivitAIDownloaderCLI:
         download_settings = dict(self.config_manager.get_download_settings())
         if getattr(self.args, 'verify', False):
             download_settings["verify_hash"] = True
+        if getattr(self.args, 'no_aria2', False):
+            download_settings["use_aria2"] = False
+        if getattr(self.args, 'connections', None):
+            download_settings["aria2_connections"] = self.args.connections
         return download_settings
     
     def check_already_present(self, download_tasks: list) -> tuple:
@@ -507,7 +524,10 @@ class CivitAIDownloaderCLI:
                 to_download.append((url, file_path, expected))
                 continue
             
-            if file_path.exists():
+            aria2_control = file_path.with_name(file_path.name + ".aria2")
+            if file_path.exists() and aria2_control.exists():
+                print(f"  ↻ {file_path.name}: partial download found, will resume")
+            elif file_path.exists():
                 actual_size = file_path.stat().st_size
                 if actual_size == expected_size:
                     if getattr(self.args, 'verify', False):

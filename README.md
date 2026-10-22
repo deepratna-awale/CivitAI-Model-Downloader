@@ -87,6 +87,8 @@ python download.py --help
 | `--type` | Force every `--url` download into one model type folder (e.g. `lora`) | Detected from CivitAI |
 | `-o`, `--output` | Folder to save `--url` downloads into, with a subfolder per type, or the `--ui` layout if given (no `--sd` needed) | None |
 | `--flat` | With `--output`, skip the per-type subfolders | `False` |
+| `--no-aria2` | Use the built-in downloader even when aria2c is installed | `False` |
+| `--connections` | Connections per file with aria2c (1-16) | `16` |
 | `--verify` | Check SHA256 hashes against CivitAI for new downloads and before skipping existing files | `False` |
 | `--resolve-only` | With `--url`, show the download URL and model info without downloading | `False` |
 
@@ -128,6 +130,25 @@ API key lookup order: `--api-key` (a literal key, or the name of an exported var
 Accepted inputs: model pages (with or without the name slug), `?modelVersionId=` version links, `/api/download/models/` links (query options like `?type=Model&format=SafeTensor` are kept), `civitai.com`, `civitai.red`, `civitai.green` and `www.` links, bare model IDs, and model names. Inputs that point to the same file are only downloaded once.
 
 Before anything downloads, the CLI lists which models are already present. A file counts as present only when its size matches CivitAI's exactly. Smaller files are re-downloaded, and an interrupted download (`<name>.part`) is resumed where it stopped. Add `--verify` to also compare SHA256 hashes. Files are written to `<name>.part` and only renamed once complete, so a half-finished file is never mistaken for a finished one. CSV downloads get the same check against the size the server reports. The command exits with a non-zero status if any URL fails, so it can be used in scripts.
+
+### Faster downloads with aria2
+When [aria2](https://aria2.github.io/) is installed, each file is downloaded over up to 16 connections at once, which is much faster for multi-GB checkpoints. Without it, the built-in downloader is used (one connection per file). Either way, up to `max_concurrent_downloads` files download at a time.
+
+```bash
+sudo apt install aria2        # Debian/Ubuntu/WSL
+brew install aria2            # macOS
+winget install aria2.aria2    # Windows
+```
+
+Both downloaders resume interrupted downloads and keep retrying as long as data is still arriving. A download only gives up after `retry_attempts` tries in a row make no progress. Optional `download_settings` in `config.json`:
+
+| Setting | Meaning | Default |
+|---------|---------|---------|
+| `use_aria2` | `"auto"` (use aria2c if installed), `true` or `false` | `"auto"` |
+| `aria2_connections` | Connections per file with aria2c | `16` |
+| `timeout` | Seconds to wait for a connection | `30` |
+| `read_timeout` | Seconds a transfer may stall before retrying | `300` |
+| `retry_attempts` | Tries in a row without progress before giving up | `3` |
 
 ### Supported UIs
 Models are saved into the folders the UI at `--sd` expects. The UI is detected from the install (e.g. a `custom_nodes` folder means ComfyUI); pass `--ui` to choose it yourself, or set `"ui": "comfyui"` in `config.json`. This applies to CSV batch downloads too.
