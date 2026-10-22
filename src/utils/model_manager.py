@@ -71,6 +71,23 @@ class ModelManager:
         self.config_manager = config_manager
         self.csv_processor = CSVProcessor()
     
+    # CivitAI API model types that map to a different config key than their lowercase name
+    API_TYPE_ALIASES = {
+        "dora": "lora",
+    }
+    
+    def model_type_key(self, api_type: Optional[str]) -> str:
+        """Map a CivitAI API model type (e.g. 'LORA', 'TextualInversion') to a model_paths key"""
+        if not api_type:
+            return "other"
+        
+        key = api_type.replace(" ", "").lower()
+        key = self.API_TYPE_ALIASES.get(key, key)
+        
+        if key in self.config_manager.get_model_paths():
+            return key
+        return "other"
+    
     def get_download_path(self, model_type: str, main_path: Path) -> Path:
         """Get the download path for a specific model type"""
         model_paths = self.config_manager.get_model_paths()

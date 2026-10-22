@@ -12,26 +12,32 @@ from typing import List, Tuple, Dict, Optional, Any
 from urllib.parse import urlparse, parse_qs
 from loguru import logger
 
+from ..config.urls import CIVITAI_API_BASE, CIVITAI_HOST_PATTERN, download_url_for, to_civitai_host
+
 
 class URLPreprocessor:
     """Preprocesses URLs in CSV files to ensure they are valid download URLs"""
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
-        self.base_url = "https://civitai.com/api/v1"
+        self.base_url = CIVITAI_API_BASE
         
         # URL patterns for different CivitAI URL types
         self.url_patterns = {
-            'download_url': re.compile(r'https://civitai\.com/api/download/models/(\d+)'),
-            'model_page': re.compile(r'https://civitai\.com/models/(\d+)'),
-            'model_version_page': re.compile(r'https://civitai\.com/models/(\d+)/.*\?modelVersionId=(\d+)'),
+            'download_url': re.compile(CIVITAI_HOST_PATTERN + r'/api/download/models/(\d+)'),
+            'model_page': re.compile(CIVITAI_HOST_PATTERN + r'/models/(\d+)'),
+            'model_version_page': re.compile(CIVITAI_HOST_PATTERN + r'/models/(\d+)(?:/[^?#]*)?\?(?:.*&)?modelVersionId=(\d+)'),
             'model_id_only': re.compile(r'^(\d+)$'),
-            'short_url': re.compile(r'https://civitai\.com/models/(\d+)/?$'),
+            'short_url': re.compile(CIVITAI_HOST_PATTERN + r'/models/(\d+)/?$'),
         }
     
     def identify_url_type(self, url: str) -> Tuple[str, Dict[str, str]]:
         """
         Identify the type of URL and extract relevant IDs
+        
+        Supports civitai.com, civitai.red and civitai.green over http/https, with or without
+        "www.", including model pages with or without a name slug and with an
+        optional modelVersionId query parameter.
         
         Returns:
             Tuple of (url_type, extracted_data)
@@ -53,11 +59,6 @@ class URLPreprocessor:
         
         # Check for general model page
         match = self.url_patterns['model_page'].match(url)
-        if match:
-            return 'model_page', {'model_id': match.group(1)}
-        
-        # Check for short URL format
-        match = self.url_patterns['short_url'].match(url)
         if match:
             return 'model_page', {'model_id': match.group(1)}
         
@@ -243,6 +244,99 @@ class URLPreprocessor:
         error_msg = f"Could not resolve URL to download link: {url}"
         logger.error(error_msg)
         return False, error_msg
+    
+    @staticmethod
+    def pick_primary_file(version_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Pick the file CivitAI serves by default for a model version"""
+        files = version_data.get('files') or []
+        for file in files:
+            if file.get('primary'):
+                return file
+        return files[0] if files else None
+    
+    async def resolve_download_target(self, session: aiohttp.ClientSession, url: str) -> Tuple[bool, Any]:
+        """
+        Resolve a URL/ID/name to everything needed to download it
+        
+        Returns:
+            Tuple of (success, target_dict_or_error_message). The target dict contains
+            download_url, model_id, model_version_id, model_name, version_name,
+            model_type and file_name (any of which except download_url may be None).
+        """
+        url = url.strip()
+        url_type, data = self.identify_url_type(url)
+        logger.debug(f"Resolving download target for URL type '{url_type}': {url}")
+        
+        model_data: Optional[Dict[str, Any]] = None
+        version_data: Optional[Dict[str, Any]] = None
+        version_id = data.get('model_version_id')
+        model_id = data.get('model_id')
+        
+        if version_id:
+            version_data = await self.get_model_version_info(session, version_id)
+        
+        if version_data is None and model_id:
+            model_data = await self.get_model_info(session, model_id)
+            if model_data:
+                versions = model_data.get('modelVersions') or []
+                version_data = next(
+                    (v for v in versions if version_id and str(v.get('id')) == str(version_id)),
+                    versions[0] if versions else None
+                )
+        
+        if version_data is None and model_data is None and url_type == 'unknown':
+            search_results = await self.search_models(session, url)
+            if search_results:
+                model_data = search_results[0]
+                versions = model_data.get('modelVersions') or []
+                version_data = versions[0] if versions else None
+        
+        if version_data is None:
+            # A direct download link still works without metadata
+            if url_type == 'download_url':
+                logger.warning(f"Could not fetch metadata for {url}, downloading as-is")
+                return True, {
+                    'download_url': to_civitai_host(url),
+                    'model_id': None,
+                    'model_version_id': version_id,
+                    'model_name': None,
+                    'version_name': None,
+                    'model_type': None,
+                    'file_name': None,
+                }
+            error_msg = f"Could not resolve URL to download link: {url}"
+            logger.error(error_msg)
+            return False, error_msg
+        
+        model_info = version_data.get('model') or {}
+        primary_file = self.pick_primary_file(version_data)
+        
+        # Keep the user's own download link, since its query string can select a specific file
+        if url_type == 'download_url':
+            download_url = to_civitai_host(url)
+        else:
+            download_url = version_data.get('downloadUrl')
+            if download_url:
+                download_url = to_civitai_host(download_url)
+            elif version_data.get('id'):
+                download_url = download_url_for(version_data['id'])
+        
+        if not download_url:
+            error_msg = f"No download URL found for: {url}"
+            logger.error(error_msg)
+            return False, error_msg
+        
+        target = {
+            'download_url': download_url,
+            'model_id': str(version_data.get('modelId') or (model_data or {}).get('id') or model_id or '') or None,
+            'model_version_id': str(version_data.get('id') or version_id or '') or None,
+            'model_name': model_info.get('name') or (model_data or {}).get('name'),
+            'version_name': version_data.get('name'),
+            'model_type': model_info.get('type') or (model_data or {}).get('type'),
+            'file_name': primary_file.get('name') if primary_file else None,
+        }
+        logger.success(f"Resolved {url} to {download_url}")
+        return True, target
     
     async def process_csv_file(self, csv_path: Path, output_path: Optional[Path] = None) -> Tuple[int, int, int]:
         """
@@ -560,22 +654,23 @@ async def process_single_url(url: str, api_key: Optional[str] = None) -> Tuple[b
     preprocessor = URLPreprocessor(api_key)
     
     async with aiohttp.ClientSession() as session:
-        success, result = await preprocessor.resolve_url(session, url, url)
+        success, target = await preprocessor.resolve_download_target(session, url)
         
-        metadata = {}
-        if success:
-            # Try to get additional metadata
-            model_id = preprocessor.extract_model_id_from_url(result)
-            if model_id:
-                model_info = await preprocessor.get_model_info(session, model_id)
-                if model_info:
-                    metadata = {
-                        'model_id': model_id,
-                        'model_name': model_info.get('name', 'Unknown'),
-                        'model_type': model_info.get('type', 'Unknown'),
-                        'creator': model_info.get('creator', {}).get('username', 'Unknown'),
-                        'download_url': result
-                    }
+        if not success:
+            return False, target, {}
+        
+        result = target['download_url']
+        metadata = {
+            key: value for key, value in {
+                'model_id': target['model_id'],
+                'model_version_id': target['model_version_id'],
+                'model_name': target['model_name'],
+                'version_name': target['version_name'],
+                'model_type': target['model_type'],
+                'file_name': target['file_name'],
+                'download_url': result,
+            }.items() if value
+        }
         
         return success, result, metadata
 

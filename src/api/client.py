@@ -8,11 +8,13 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 from loguru import logger
 
+from ..config.urls import CIVITAI_API_BASE, download_url_for
+
 
 class CivitAIApiClient:
     """Client for interacting with CivitAI API"""
     
-    BASE_URL = "https://civitai.com/api/v1/"
+    BASE_URL = f"{CIVITAI_API_BASE}/"
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
@@ -146,7 +148,7 @@ class CivitAIApiClient:
             # Construct download URL
             version_id = latest_version.get("id")
             if version_id:
-                return f"https://civitai.com/api/download/models/{version_id}"
+                return download_url_for(version_id)
         
         return None
     

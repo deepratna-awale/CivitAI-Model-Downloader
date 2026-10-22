@@ -22,7 +22,7 @@ class TestURLPreprocessor:
         # With API key
         preprocessor = URLPreprocessor(api_key="test_key")
         assert preprocessor.api_key == "test_key"
-        assert preprocessor.base_url == "https://civitai.com/api/v1"
+        assert preprocessor.base_url == "https://civitai.red/api/v1"
     
     def test_identify_url_type_download_url(self):
         """Test identifying download URLs"""
