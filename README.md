@@ -36,6 +36,9 @@ python download.py --sd /path/to/stable-diffusion --api-key your-api-key
 
 # Preprocess URLs then download
 python download.py --preprocess --api-key your-api-key
+
+# Download straight from a CivitAI URL (no CSV needed)
+python download.py --url "https://civitai.red/models/4201?modelVersionId=130072" --sd ~/stable-diffusion-webui
 ```
 
 ## 📋 Requirements
@@ -74,11 +77,74 @@ python download.py --help
 #### CLI Arguments
 | Argument | Description | Default |
 |----------|-------------|---------|
-| `--sd`, `--stable-diffusion` | Stable Diffusion installation path | Interactive prompt |
+| `--sd`, `--stable-diffusion` | Stable Diffusion UI installation path | Interactive prompt |
+| `--ui` | UI layout to use: `a1111`, `forge`, `reforge`, `sdnext`, `comfyui`, `fooocus`, `swarmui` | Auto-detected from `--sd` |
 | `--csv`, `--csvs-dir` | Directory containing CSV files | `CSVs` |
-| `--api-key` | CivitAI API key for authentication | Interactive prompt |
+| `--api-key` | CivitAI API key, or the name of an env var holding it (e.g. `CAI_API_KEY`) | `CAI_API_KEY` / `CIVITAI_API_KEY` env var, then `config.json`, then prompt |
 | `--preprocess` | Preprocess URLs before downloading | `False` |
-| `--url` | Download single model from URL | None |
+| `--url`, `--urls` | Download one or more models from CivitAI URLs, model IDs or names | None |
+| `--url-file` | Text file with one URL/ID/name per line (`#` comments allowed) | None |
+| `--type` | Force every `--url` download into one model type folder (e.g. `lora`) | Detected from CivitAI |
+| `-o`, `--output` | Folder to save `--url` downloads into, with a subfolder per type, or the `--ui` layout if given (no `--sd` needed) | None |
+| `--flat` | With `--output`, skip the per-type subfolders | `False` |
+| `--resolve-only` | With `--url`, show the download URL and model info without downloading | `False` |
+
+### Download by URL
+Paste any CivitAI link straight into the CLI. All API calls and downloads go through `https://civitai.red`; links copied from `civitai.com` or `civitai.green` are rewritten automatically. The model type (checkpoint, LoRA, embedding, ...) is looked up on CivitAI and the file is saved into the matching folder from `model_paths`, using the file's real name.
+
+```bash
+# Model page (latest version)
+python download.py --url "https://civitai.red/models/4201/realistic-vision" --sd ~/stable-diffusion-webui
+
+# A list of models of different types: each lands in its own folder
+# (checkpoints in models/Stable-diffusion, LoRAs in models/Lora, embeddings in Embeddings, ...)
+python download.py --sd ~/stable-diffusion-webui --url \
+  "https://civitai.red/models/4201?modelVersionId=130072" \
+  "https://civitai.red/api/download/models/9208" \
+  7808
+
+# Or keep the list in a file, one per line
+python download.py --sd ~/stable-diffusion-webui --url-file my-models.txt
+
+# Force the destination folder
+python download.py --url "https://civitai.red/api/download/models/130072" --type lora --sd ~/stable-diffusion-webui
+
+# Save into any folder instead of the Stable Diffusion tree
+# (creates ~/Downloads/models/checkpoint, ~/Downloads/models/lora, ...; add --flat to skip subfolders)
+python download.py --url "https://civitai.red/models/4201/realistic-vision" --output ~/Downloads/models
+
+# Use an API key from an exported environment variable
+export CAI_API_KEY=your-civitai-api-key
+python download.py --url "https://civitai.red/api/download/models/130072" -o ./models
+python download.py --api-key CAI_API_KEY --url "https://civitai.red/models/4201" -o ./models
+
+# Just show what would be downloaded
+python download.py --url "https://civitai.red/models/4201/realistic-vision" --resolve-only
+```
+
+API key lookup order: `--api-key` (a literal key, or the name of an exported variable), then the `CAI_API_KEY` or `CIVITAI_API_KEY` environment variable, then `config.json`. Keys read from the environment are never written to `config.json`.
+
+Accepted inputs: model pages (with or without the name slug), `?modelVersionId=` version links, `/api/download/models/` links (query options like `?type=Model&format=SafeTensor` are kept), `civitai.com`, `civitai.red`, `civitai.green` and `www.` links, bare model IDs, and model names. Inputs that point to the same file are only downloaded once. The command exits with a non-zero status if any URL fails, so it can be used in scripts.
+
+### Supported UIs
+Models are saved into the folders the UI at `--sd` expects. The UI is detected from the install (e.g. a `custom_nodes` folder means ComfyUI); pass `--ui` to choose it yourself, or set `"ui": "comfyui"` in `config.json`. This applies to CSV batch downloads too.
+
+| Type | A1111 / Forge / reForge | SD.Next | ComfyUI | Fooocus | SwarmUI |
+|------|------|------|------|------|------|
+| Checkpoint | `models/Stable-diffusion` | `models/Stable-diffusion` | `models/checkpoints` | `models/checkpoints` | `Models/Stable-Diffusion` |
+| LoRA / LoCon / DoRA | `models/Lora` | `models/Lora` | `models/loras` | `models/loras` | `Models/Lora` |
+| Embedding | `Embeddings` | `models/embeddings` | `models/embeddings` | `models/embeddings` | `Models/Embeddings` |
+| VAE | `models/VAE` | `models/VAE` | `models/vae` | `models/vae` | `Models/VAE` |
+| ControlNet | `models/ControlNet` | `models/control/controlnet` | `models/controlnet` | `models/controlnet` | `Models/controlnet` |
+| Upscaler | `models/ESRGAN` | `models/ESRGAN` | `models/upscale_models` | `models/upscale_models` | `Models/upscale_models` |
+| Anything else | `models/Other` | `models/Other` | `models/other` | `models/other` | `Models/other` |
+
+A1111, Forge and reForge follow `model_paths` in `config.json`, so custom folders there still apply. `--ui` also accepts nicknames like `next`, `comfy` and `automatic1111`.
+
+```bash
+python download.py --sd ~/ComfyUI --url "https://civitai.red/models/4201" 7808
+python download.py --sd ~/sdnext --ui next --url-file my-models.txt
+```
 
 ### URL Preprocessing
 Convert any CivitAI URL format to proper download URLs:
@@ -97,7 +163,8 @@ python download.py --preprocess --api-key your-api-key
 **Supported URL Formats:**
 - ✅ `https://civitai.com/api/download/models/123456` (already correct)
 - ✅ `https://civitai.com/models/123456/model-name` (model page)
-- ✅ `https://civitai.com/models/123456?modelVersionId=789` (version page)
+- ✅ `https://civitai.com/models/123456?modelVersionId=789` (version page, with or without the name slug)
+- ✅ `www.civitai.com` and `civitai.green` links
 - ✅ `123456` (model ID only)
 - ✅ Automatic search by model name for unrecognized URLs
 

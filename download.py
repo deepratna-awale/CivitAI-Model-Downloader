@@ -4,10 +4,29 @@ CivitAI Model Downloader - CLI Interface
 """
 
 import asyncio
+import os
 import subprocess
 import sys
 import argparse
 from pathlib import Path
+
+# UI names accepted by --ui (see src/config/ui_presets.py for the folder layouts)
+UI_CHOICES = ("a1111", "forge", "reforge", "sdnext", "comfyui", "fooocus", "swarmui")
+
+def ui_name(value: str) -> str:
+    """argparse type for --ui: accepts preset names and common aliases (e.g. 'next', 'comfy')"""
+    from src.config.ui_presets import normalize_ui
+    ui = normalize_ui(value)
+    if not ui:
+        raise argparse.ArgumentTypeError(
+            f"unknown UI '{value}' (choose from {', '.join(UI_CHOICES)})"
+        )
+    return ui
+
+
+# Environment variables checked for the CivitAI API key when --api-key is not given
+API_KEY_ENV_VARS = ("CAI_API_KEY", "CIVITAI_API_KEY")
+
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -20,7 +39,15 @@ Examples:
   %(prog)s --api-key your-civitai-api-key
   %(prog)s --preprocess --api-key your-api-key
   %(prog)s --preprocess --csv ./my-csvs --text-files
-  %(prog)s --url "https://civitai.com/models/4201/realistic-vision" --api-key your-api-key
+  %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --sd ~/stable-diffusion-webui
+  %(prog)s --api-key CAI_API_KEY --url "https://civitai.red/api/download/models/130072" --sd ~/stable-diffusion-webui
+  %(prog)s --url "https://civitai.red/models/4201?modelVersionId=130072" --url 4201 --sd ~/stable-diffusion-webui
+  %(prog)s --url "https://civitai.red/api/download/models/130072" --type lora --sd ~/stable-diffusion-webui
+  %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --output ~/Downloads/models
+  %(prog)s --url URL1 URL2 URL3 --sd ~/stable-diffusion-webui
+  %(prog)s --url URL1 URL2 --sd ~/ComfyUI --ui comfyui
+  %(prog)s --url-file my-models.txt --output ~/Downloads/models
+  %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --resolve-only
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -29,7 +56,17 @@ Examples:
         "--sd", "--stable-diffusion",
         dest="sd_path",
         type=str,
-        help="Path to Stable Diffusion installation directory"
+        help="Path to the Stable Diffusion UI installation directory (A1111, Forge, ComfyUI, ...)"
+    )
+    
+    parser.add_argument(
+        "--ui",
+        dest="ui",
+        type=ui_name,
+        metavar="UI",
+        help=f"Which UI is installed at --sd ({', '.join(UI_CHOICES)}), so models go into "
+             "that UI's folders. "
+             "Detected from the install when omitted (falls back to config.json's model_paths)"
     )
     
     parser.add_argument(
@@ -43,7 +80,9 @@ Examples:
         "--api-key",
         dest="api_key",
         type=str,
-        help="CivitAI API key for authentication"
+        help="CivitAI API key, or the name of an environment variable holding it "
+             "(e.g. CAI_API_KEY). Falls back to the CAI_API_KEY or CIVITAI_API_KEY "
+             "environment variable, then config.json"
     )
     
     parser.add_argument(
@@ -53,10 +92,52 @@ Examples:
     )
     
     parser.add_argument(
-        "--url",
-        dest="single_url",
+        "--url", "--urls",
+        dest="urls",
+        nargs="+",
+        action="extend",
+        metavar="URL",
+        help="Download models from CivitAI model page URLs, version URLs, download URLs, model IDs "
+             "or names. Accepts several values and can be repeated. Each model is saved into "
+             "its type folder (checkpoint, lora, ...) based on CivitAI's metadata"
+    )
+    
+    parser.add_argument(
+        "--url-file",
+        dest="url_file",
         type=str,
-        help="Process a single URL/ID/name and display the download URL (preprocessing only)"
+        metavar="FILE",
+        help="Text file with one URL/ID/name per line to download (blank lines and lines "
+             "starting with # are ignored). Can be combined with --url"
+    )
+    
+    parser.add_argument(
+        "--type",
+        dest="model_type",
+        type=str,
+        help="Force every --url download into this model type folder (e.g. checkpoint, lora) "
+             "instead of detecting it from CivitAI"
+    )
+    
+    parser.add_argument(
+        "-o", "--output",
+        dest="output_dir",
+        type=str,
+        help="Directory to save --url downloads into instead of a Stable Diffusion install. "
+             "Models are sorted into a subfolder per type (e.g. OUTPUT/lora), or into the "
+             "--ui layout when --ui is given"
+    )
+    
+    parser.add_argument(
+        "--flat",
+        action="store_true",
+        help="With --output, save every model directly in the output directory without type subfolders"
+    )
+    
+    parser.add_argument(
+        "--resolve-only",
+        action="store_true",
+        help="With --url, only display the resolved download URL and model info without downloading"
     )
     
     parser.add_argument(
@@ -117,6 +198,7 @@ setup_logging()
 
 
 # Import our modules
+from src.config.ui_presets import detect_ui
 from src import ConfigManager, CivitAIApiClient, FileDownloader, ModelManager, URLPreprocessor, preprocess_urls, process_single_url
 
 
@@ -133,32 +215,73 @@ class CivitAIDownloaderCLI:
             logger.info(f"Using CSV directory from CLI: {self.args.csvs_dir}")
             self.config_manager.set_csvs_directory(self.args.csvs_dir)
         
-        # Apply API key from CLI if provided
-        if hasattr(self.args, 'api_key') and self.args.api_key:
-            logger.info("Using API key from CLI")
-            self.config_manager.set_api_key(self.args.api_key)
+        # Apply UI layout from CLI if provided
+        if getattr(self.args, 'ui', None):
+            logger.info(f"Using {self.args.ui} folder layout from CLI")
+            self.config_manager.set_ui(self.args.ui)
+        
+        # Apply API key from CLI or environment if provided
+        self.api_key_source = self.apply_api_key_override()
         
         self.model_manager = ModelManager(self.config_manager)
+    
+    def apply_api_key_override(self) -> str | None:
+        """
+        Resolve the API key from the CLI or environment, in this order:
+        
+        1. --api-key VALUE, where VALUE may also be the name of an exported
+           environment variable holding the key (e.g. --api-key CAI_API_KEY)
+        2. The CAI_API_KEY (or CIVITAI_API_KEY) environment variable
+        3. The key saved in config.json
+        
+        Keys read from the environment are used for this run only and are never
+        written to config.json.
+        """
+        cli_value = getattr(self.args, 'api_key', None)
+        if cli_value:
+            env_value = os.environ.get(cli_value, "").strip()
+            if env_value:
+                logger.info(f"Using API key from environment variable {cli_value}")
+                self.config_manager.config["civitai_api_key"] = env_value
+                return "env"
+            logger.info("Using API key from CLI")
+            self.config_manager.set_api_key(cli_value)
+            return "cli"
+        
+        for env_name in API_KEY_ENV_VARS:
+            env_value = os.environ.get(env_name, "").strip()
+            if env_value:
+                logger.info(f"Using API key from environment variable {env_name}")
+                self.config_manager.config["civitai_api_key"] = env_value
+                return "env"
+        
+        return None
     
     def setup_api_key(self):
         """Setup CivitAI API key if not configured"""
         api_key = self.config_manager.get_api_key()
         
-        # If API key was provided via CLI, we're done
-        if hasattr(self.args, 'api_key') and self.args.api_key:
-            logger.info("API key configured via CLI")
+        # If API key was provided via CLI or environment, we're done
+        if self.api_key_source:
+            logger.info(f"API key configured via {self.api_key_source.upper()}")
             return
         
         if not api_key:
             logger.info("CivitAI API Key Setup")
             print("\nCivitAI API Key Setup")
             print("To download models from CivitAI, you need an API key.")
-            print("1. Go to https://civitai.com/user/account")
+            print("1. Go to https://civitai.red/user/account")
             print("2. Create an API token")
             print("3. Copy the token and paste it below")
             
             while True:
-                api_key = input("Enter your CivitAI API key (or press Enter to skip): ").strip()
+                try:
+                    api_key = input("Enter your CivitAI API key (or press Enter to skip): ").strip()
+                except EOFError:
+                    # Non-interactive run (e.g. scripted CLI usage): continue without a key
+                    logger.warning("No API key provided and no interactive input available")
+                    print("\nWarning: Continuing without an API key.")
+                    break
                 if api_key:
                     self.config_manager.set_api_key(api_key)
                     logger.success("API key saved successfully!")
@@ -171,6 +294,27 @@ class CivitAIDownloaderCLI:
                     if confirm == 'y':
                         break
     
+    def apply_ui_layout(self, main_path: Path):
+        """Detect the UI at main_path when none was chosen via --ui or config.json"""
+        ui = self.args.ui if getattr(self.args, 'ui', None) else None
+        ui = ui or self.config_manager.config.get("ui")
+        if not ui:
+            ui = detect_ui(main_path)
+            if ui:
+                logger.info(f"Detected {ui} install at {main_path}")
+        self.config_manager.set_ui(ui)
+        ui = self.config_manager.get_ui()
+        
+        if ui:
+            print(f"Using {ui} folder layout")
+        else:
+            logger.info("No UI detected, using model_paths from config.json")
+    
+    def is_valid_ui_root(self, main_path: Path) -> bool:
+        """Check that main_path contains the top-level models folder of the active layout"""
+        checkpoint_dir = self.config_manager.get_model_paths().get("checkpoint", "models")
+        return (main_path / Path(checkpoint_dir).parts[0]).is_dir()
+    
     def get_stable_diffusion_path(self) -> Path | None:
         """Get and validate Stable Diffusion installation path"""
         logger.info("Starting Stable Diffusion path validation")
@@ -178,7 +322,7 @@ class CivitAIDownloaderCLI:
         # Check if path was provided via CLI argument
         if hasattr(self.args, 'sd_path') and self.args.sd_path:
             logger.info(f"Using Stable Diffusion path from CLI: {self.args.sd_path}")
-            main_path = Path(self.args.sd_path)
+            main_path = Path(self.args.sd_path).expanduser()
             
             if not main_path.exists():
                 logger.error(f"CLI provided path does not exist: {main_path}")
@@ -186,7 +330,8 @@ class CivitAIDownloaderCLI:
                 return None
             
             # Check if models folder exists (simplified validation)
-            if (main_path / "models").exists():
+            self.apply_ui_layout(main_path)
+            if self.is_valid_ui_root(main_path):
                 logger.success(f"Valid Stable Diffusion path found: {main_path}")
                 print(f"Using Stable Diffusion path: {main_path}")
                 return main_path
@@ -213,7 +358,8 @@ class CivitAIDownloaderCLI:
                 continue
             
             # Check if models folder exists (simplified validation)
-            if (main_path / "models").exists():
+            self.apply_ui_layout(main_path)
+            if self.is_valid_ui_root(main_path):
                 logger.success(f"Valid Stable Diffusion path found: {main_path}")
                 print("Valid Stable Diffusion path found.")
                 return main_path
@@ -280,12 +426,11 @@ class CivitAIDownloaderCLI:
             print(f"❌ Error during preprocessing: {e}")
             raise
     
-    async def process_single_url(self):
+    async def process_single_url(self, url: str):
         """Process a single URL and display the result"""
         logger.info("Processing single URL...")
         print("\n🔗 Processing single URL...")
         
-        url = self.args.single_url
         api_key = self.config_manager.get_api_key()
         
         print(f"Input: {url}")
@@ -312,6 +457,110 @@ class CivitAIDownloaderCLI:
             logger.error(f"Error processing single URL: {e}")
             print(f"❌ Error processing URL: {e}")
             raise
+    
+    def collect_urls(self) -> list:
+        """Gather URLs from --url and --url-file, dropping duplicates while keeping order"""
+        urls = list(getattr(self.args, 'urls', None) or [])
+        
+        url_file = getattr(self.args, 'url_file', None)
+        if url_file:
+            url_file_path = Path(url_file).expanduser()
+            try:
+                with open(url_file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            urls.append(line)
+            except OSError as e:
+                logger.error(f"Could not read URL file {url_file_path}: {e}")
+                print(f"Error: Could not read URL file {url_file_path}: {e}")
+                sys.exit(1)
+        
+        unique_urls = []
+        for url in (u.strip() for u in urls):
+            if url and url not in unique_urls:
+                unique_urls.append(url)
+        return unique_urls
+    
+    async def download_urls(self, urls: list, main_path: Path | None = None,
+                            output_dir: Path | None = None) -> tuple:
+        """
+        Resolve URLs and download each model
+        
+        Each model is sorted into its type folder: under output_dir when given
+        (or directly into it with --flat), otherwise the configured folder
+        under the Stable Diffusion path.
+        """
+        logger.info(f"Downloading {len(urls)} model(s) from URL")
+        print(f"\n🔗 Resolving {len(urls)} URL(s)...")
+        
+        api_key = self.config_manager.get_api_key()
+        model_type_override = getattr(self.args, 'model_type', None)
+        flat = getattr(self.args, 'flat', False)
+        preprocessor = URLPreprocessor(api_key)
+        
+        download_tasks = []
+        failed = 0
+        
+        async with aiohttp.ClientSession() as session:
+            for url in urls:
+                success, target = await preprocessor.resolve_download_target(session, url)
+                if not success:
+                    print(f"  ✗ {url}: {target}")
+                    failed += 1
+                    continue
+                
+                model_type = (model_type_override.lower() if model_type_override
+                              else self.model_manager.model_type_key(target['model_type']))
+                if output_dir and getattr(self.args, 'ui', None) and not flat:
+                    # Lay the output directory out like the chosen UI
+                    download_path = self.model_manager.get_download_path(model_type, output_dir)
+                elif output_dir:
+                    download_path = output_dir if flat else output_dir / model_type
+                    download_path.mkdir(parents=True, exist_ok=True)
+                else:
+                    download_path = self.model_manager.get_download_path(model_type, main_path)
+                
+                file_name = target['file_name']
+                if not file_name:
+                    base_name = target['model_name'] or f"model_{target['model_version_id'] or len(download_tasks) + 1}"
+                    file_name = f"{base_name}.safetensors"
+                file_path = download_path / Path(file_name).name
+                
+                label = target['model_name'] or url
+                if target['version_name']:
+                    label = f"{label} ({target['version_name']})"
+                
+                # Different inputs (e.g. a model page and its download link) can point to the same file
+                if any(existing_path == file_path for _, existing_path in download_tasks):
+                    print(f"  = {label} already queued ({url})")
+                    continue
+                
+                print(f"  ✓ {label} → {file_path}")
+                download_tasks.append((target['download_url'], file_path))
+        
+        if not download_tasks:
+            return 0, failed
+        
+        download_settings = self.config_manager.get_download_settings()
+        async with FileDownloader(api_key, download_settings) as downloader:
+            results = await downloader.download_files(download_tasks, "URL Downloads")
+        
+        downloaded = sum(1 for success, message in results if success and "Skipped" not in message)
+        skipped = sum(1 for success, message in results if success and "Skipped" in message)
+        failed += sum(1 for success, _ in results if not success)
+        
+        print(f"\nURL Download Summary:")
+        print(f"  Downloaded: {downloaded}")
+        print(f"  Skipped (already exist): {skipped}")
+        print(f"  Failed: {failed}")
+        for success, message in results:
+            if not success:
+                logger.error(f"Failed download: {message}")
+                print(f"  - {message}")
+        
+        logger.info(f"URL downloads completed: {downloaded} downloaded, {skipped} skipped, {failed} failed")
+        return downloaded, failed
     
     async def resolve_missing_urls(self, missing_url_tasks, model_type):
         """Resolve missing URLs using CivitAI API"""
@@ -411,9 +660,33 @@ class CivitAIDownloaderCLI:
         # Setup API key
         self.setup_api_key()
         
-        # Handle single URL processing
-        if hasattr(self.args, 'single_url') and self.args.single_url:
-            await self.process_single_url()
+        # Handle URL downloads
+        urls = self.collect_urls()
+        if urls:
+            if getattr(self.args, 'resolve_only', False):
+                for url in urls:
+                    await self.process_single_url(url)
+                return
+            
+            output_dir = getattr(self.args, 'output_dir', None)
+            if output_dir:
+                output_dir = Path(output_dir).expanduser()
+                if output_dir.exists() and not output_dir.is_dir():
+                    logger.error(f"Output path is not a directory: {output_dir}")
+                    print(f"Error: Output path is not a directory: {output_dir}")
+                    sys.exit(1)
+                logger.info(f"Saving URL downloads to: {output_dir}")
+                main_path = None
+            else:
+                main_path = self.get_stable_diffusion_path()
+                if not main_path:
+                    logger.error("Failed to get valid Stable Diffusion path")
+                    print("Please rerun the script with a valid --sd or --output path.")
+                    return
+            
+            _, failed = await self.download_urls(urls, main_path, output_dir)
+            if failed:
+                sys.exit(1)
             return
         
         # Handle preprocessing if requested

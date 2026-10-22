@@ -195,7 +195,7 @@ class TestCivitAIApiClient:
         
         download_url = client.extract_download_url(sample_api_responses["model_info"])
         
-        expected_url = "https://civitai.com/api/download/models/67890"
+        expected_url = "https://civitai.red/api/download/models/67890"
         assert download_url == expected_url
     
     @pytest.mark.asyncio
@@ -226,7 +226,7 @@ class TestCivitAIApiClient:
             
             download_url = await client.find_download_url("Test Model", "12345")
             
-            expected_url = "https://civitai.com/api/download/models/67890"
+            expected_url = "https://civitai.red/api/download/models/67890"
             assert download_url == expected_url
             mock_get_model.assert_called_once_with(12345)
     
@@ -240,6 +240,6 @@ class TestCivitAIApiClient:
             
             download_url = await client.find_download_url("Test Model")
             
-            expected_url = "https://civitai.com/api/download/models/67890"
+            expected_url = "https://civitai.red/api/download/models/67890"
             assert download_url == expected_url
             mock_search.assert_called_once_with("Test Model", None)

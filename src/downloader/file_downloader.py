@@ -11,6 +11,8 @@ from tqdm.asyncio import tqdm
 from loguru import logger
 import threading
 
+from ..config.urls import to_civitai_host
+
 
 class ProgressManager:
     """Manages multiple concurrent progress bars"""
@@ -126,7 +128,8 @@ class FileDownloader:
             logger.debug(f"Starting download: {file_path.name}")
             for attempt in range(self.download_settings.get("retry_attempts", 3)):
                 try:
-                    download_url = url if self.api_key else self.add_api_key_to_url(url)
+                    request_url = to_civitai_host(url)
+                    download_url = request_url if self.api_key else self.add_api_key_to_url(request_url)
                     
                     async with self.session.get(download_url) as response: # type: ignore
                         if response.status == 200:
