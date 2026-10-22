@@ -87,6 +87,7 @@ python download.py --help
 | `--type` | Force every `--url` download into one model type folder (e.g. `lora`) | Detected from CivitAI |
 | `-o`, `--output` | Folder to save `--url` downloads into, with a subfolder per type, or the `--ui` layout if given (no `--sd` needed) | None |
 | `--flat` | With `--output`, skip the per-type subfolders | `False` |
+| `--verify` | Check SHA256 hashes against CivitAI for new downloads and before skipping existing files | `False` |
 | `--resolve-only` | With `--url`, show the download URL and model info without downloading | `False` |
 
 ### Download by URL
@@ -124,7 +125,9 @@ python download.py --url "https://civitai.red/models/4201/realistic-vision" --re
 
 API key lookup order: `--api-key` (a literal key, or the name of an exported variable), then the `CAI_API_KEY` or `CIVITAI_API_KEY` environment variable, then `config.json`. Keys read from the environment are never written to `config.json`.
 
-Accepted inputs: model pages (with or without the name slug), `?modelVersionId=` version links, `/api/download/models/` links (query options like `?type=Model&format=SafeTensor` are kept), `civitai.com`, `civitai.red`, `civitai.green` and `www.` links, bare model IDs, and model names. Inputs that point to the same file are only downloaded once. The command exits with a non-zero status if any URL fails, so it can be used in scripts.
+Accepted inputs: model pages (with or without the name slug), `?modelVersionId=` version links, `/api/download/models/` links (query options like `?type=Model&format=SafeTensor` are kept), `civitai.com`, `civitai.red`, `civitai.green` and `www.` links, bare model IDs, and model names. Inputs that point to the same file are only downloaded once.
+
+Before anything downloads, the CLI lists which models are already present. A file counts as present only when its size matches CivitAI's exactly. Smaller files are re-downloaded, and an interrupted download (`<name>.part`) is resumed where it stopped. Add `--verify` to also compare SHA256 hashes. Files are written to `<name>.part` and only renamed once complete, so a half-finished file is never mistaken for a finished one. CSV downloads get the same check against the size the server reports. The command exits with a non-zero status if any URL fails, so it can be used in scripts.
 
 ### Supported UIs
 Models are saved into the folders the UI at `--sd` expects. The UI is detected from the install (e.g. a `custom_nodes` folder means ComfyUI); pass `--ui` to choose it yourself, or set `"ui": "comfyui"` in `config.json`. This applies to CSV batch downloads too.

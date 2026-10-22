@@ -3,10 +3,13 @@ Async file downloader with retry logic and progress tracking
 """
 
 import asyncio
+import hashlib
+import re
 import aiofiles
 import aiohttp
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from urllib.parse import unquote
 from tqdm.asyncio import tqdm
 from loguru import logger
 import threading
@@ -85,7 +88,10 @@ class FileDownloader:
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def __aenter__(self):
-        timeout = aiohttp.ClientTimeout(total=self.download_settings.get("timeout", 30))
+        # No total limit: large models take far longer than the timeout to download.
+        # The timeout instead applies to connecting and to each read stalling.
+        timeout_seconds = self.download_settings.get("timeout", 30)
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=timeout_seconds, sock_read=timeout_seconds)
         connector = aiohttp.TCPConnector(limit=self.download_settings.get("max_concurrent_downloads", 4))
         
         headers = {}
@@ -113,89 +119,182 @@ class FileDownloader:
         else:
             return f"{url}?token={self.api_key}"
     
+    @staticmethod
+    def filename_from_content_disposition(content_disposition: str) -> Optional[str]:
+        """Extract a safe file name from a Content-Disposition header"""
+        match = re.search(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', content_disposition, re.IGNORECASE)
+        if not match:
+            return None
+        name = Path(unquote(match.group(1).strip())).name
+        return name or None
+    
+    @staticmethod
+    def sha256_of(file_path: Path) -> str:
+        """Compute a file's SHA256 hash"""
+        digest = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            for block in iter(lambda: f.read(1024 * 1024), b''):
+                digest.update(block)
+        return digest.hexdigest().upper()
+    
+    async def check_existing_file(self, file_path: Path, expected_size: Optional[int],
+                                  expected_sha256: Optional[str]) -> Optional[str]:
+        """
+        Decide whether an existing file is complete
+        
+        Returns a skip message if the file is complete, or None if it must be
+        (re)downloaded. Files whose expected size is unknown are not judged here.
+        """
+        actual_size = file_path.stat().st_size
+        if expected_size is not None and actual_size != expected_size:
+            logger.warning(f"{file_path.name} is {actual_size} bytes but should be {expected_size}, re-downloading")
+            return None
+        
+        if expected_sha256 and self.download_settings.get("verify_hash", False):
+            actual_sha256 = await asyncio.to_thread(self.sha256_of, file_path)
+            if actual_sha256 != expected_sha256.upper():
+                logger.warning(f"{file_path.name} hash does not match CivitAI's, re-downloading")
+                return None
+        
+        logger.info(f"File already exists and is complete, skipping: {file_path.name}")
+        return f"Skipped (already exists): {file_path.name}"
+    
     async def download_file(self, url: str, file_path: Path, semaphore: asyncio.Semaphore, 
-                          progress_manager: ProgressManager) -> Tuple[bool, str]:
-        """Download a single file with retry logic and progress tracking"""
+                          progress_manager: ProgressManager,
+                          expected: Optional[Dict] = None) -> Tuple[bool, str]:
+        """
+        Download a single file with retry logic, resume support and progress tracking
+        
+        Data is written to "<name>.part" and only renamed once the size (and,
+        with verify_hash, the SHA256) matches, so an interrupted download is
+        resumed next time instead of being mistaken for a finished file.
+        
+        Args:
+            expected: Optional {"size": bytes, "sha256": hex} from CivitAI metadata
+        """
         file_id = f"{file_path.name}_{id(asyncio.current_task())}"
+        expected = expected or {}
+        expected_size = expected.get("size")
+        expected_sha256 = expected.get("sha256")
+        retry_attempts = self.download_settings.get("retry_attempts", 3)
         
         # Check if file already exists (if skip_existing_files is enabled)
         skip_existing = self.download_settings.get("skip_existing_files", True)
-        if skip_existing and file_path.exists():
-            logger.info(f"File already exists, skipping: {file_path.name}")
-            return True, f"Skipped (already exists): {file_path.name}"
+        checked_path = None
+        if skip_existing and file_path.exists() and expected_size is not None:
+            checked_path = file_path
+            skip_message = await self.check_existing_file(file_path, expected_size, expected_sha256)
+            if skip_message:
+                return True, skip_message
         
         async with semaphore:
             logger.debug(f"Starting download: {file_path.name}")
-            for attempt in range(self.download_settings.get("retry_attempts", 3)):
+            for attempt in range(retry_attempts):
                 try:
                     request_url = to_civitai_host(url)
                     download_url = request_url if self.api_key else self.add_api_key_to_url(request_url)
                     
+                    # Resolve the final file name before deciding whether to resume
                     async with self.session.get(download_url) as response: # type: ignore
-                        if response.status == 200:
-                            file_path.parent.mkdir(parents=True, exist_ok=True)
-                            
-                            # Get filename from Content-Disposition header if available
-                            content_disposition = response.headers.get('content-disposition', '')
-                            if 'filename=' in content_disposition:
-                                filename = content_disposition.split('filename=')[1].strip('"')
-                                final_file_path = file_path.parent / filename
-                                
-                                # Check again with the actual filename from server (if skip_existing is enabled)
-                                if skip_existing and final_file_path.exists():
-                                    logger.info(f"File already exists with server filename, skipping: {final_file_path.name}")
-                                    return True, f"Skipped (already exists): {final_file_path.name}"
-                                
-                                file_path = final_file_path
-                            
-                            async with aiofiles.open(file_path, 'wb') as f:
-                                total_size = int(response.headers.get('content-length', 0))
-                                logger.debug(f"Downloading {file_path.name} ({total_size} bytes)")
-                                
-                                # Create progress bar using the progress manager
-                                progress = progress_manager.create_file_progress(
-                                    file_id, file_path.name, total_size
-                                )
-                                
-                                try:
-                                    downloaded = 0
-                                    async for chunk in response.content.iter_chunked(8192):
-                                        await f.write(chunk)
-                                        downloaded += len(chunk)
-                                        progress.update(len(chunk))
-                                finally:
-                                    progress_manager.remove_file_progress(file_id)
-                            
-                            logger.success(f"Successfully downloaded: {file_path.name}")
-                            return True, f"Downloaded: {file_path.name}"
-                        
-                        elif response.status == 401:
+                        if response.status == 401:
                             return False, f"Authentication failed for {url}. Check your API key."
-                        
-                        elif response.status == 404:
+                        if response.status == 404:
                             return False, f"File not found: {url}"
+                        if response.status != 200:
+                            raise aiohttp.ClientResponseError(
+                                response.request_info, response.history,
+                                status=response.status, message=f"HTTP {response.status} for {url}"
+                            )
                         
-                        else:
-                            error_msg = f"HTTP {response.status} for {url}"
-                            if attempt == self.download_settings.get("retry_attempts", 3) - 1:
-                                return False, error_msg
+                        server_name = self.filename_from_content_disposition(
+                            response.headers.get('content-disposition', '')
+                        )
+                        if server_name:
+                            file_path = file_path.parent / server_name
+                        
+                        total_size = response.content_length
+                        if expected_size is None and total_size:
+                            expected_size = total_size
+                        
+                        # Now that the real name and size are known, check for a finished file
+                        if skip_existing and file_path.exists() and file_path != checked_path:
+                            skip_message = await self.check_existing_file(file_path, expected_size, expected_sha256)
+                            if skip_message:
+                                return True, skip_message
+                        
+                        file_path.parent.mkdir(parents=True, exist_ok=True)
+                        part_path = file_path.with_name(file_path.name + ".part")
+                        resume_from = part_path.stat().st_size if part_path.exists() else 0
+                        if expected_size is not None and resume_from > expected_size:
+                            resume_from = 0
+                        
+                        if resume_from == 0:
+                            await self._write_body(response, part_path, 'wb', 0, expected_size,
+                                                   file_id, file_path.name, progress_manager)
+                    
+                    if resume_from > 0:
+                        # Continue a previous partial download where it stopped
+                        logger.info(f"Resuming {file_path.name} from {resume_from} bytes")
+                        headers = {"Range": f"bytes={resume_from}-"}
+                        async with self.session.get(download_url, headers=headers) as response: # type: ignore
+                            if response.status == 206:
+                                await self._write_body(response, part_path, 'ab', resume_from, expected_size,
+                                                       file_id, file_path.name, progress_manager)
+                            elif response.status == 200:
+                                await self._write_body(response, part_path, 'wb', 0, expected_size,
+                                                       file_id, file_path.name, progress_manager)
+                            elif response.status == 416 and part_path.stat().st_size == expected_size:
+                                pass  # Already fully downloaded
+                            else:
+                                raise aiohttp.ClientResponseError(
+                                    response.request_info, response.history,
+                                    status=response.status, message=f"HTTP {response.status} resuming {url}"
+                                )
+                    
+                    actual_size = part_path.stat().st_size
+                    if expected_size is not None and actual_size != expected_size:
+                        raise IOError(f"incomplete download ({actual_size} of {expected_size} bytes)")
+                    
+                    if expected_sha256 and self.download_settings.get("verify_hash", False):
+                        actual_sha256 = await asyncio.to_thread(self.sha256_of, part_path)
+                        if actual_sha256 != expected_sha256.upper():
+                            part_path.unlink()
+                            raise IOError("SHA256 does not match CivitAI's hash")
+                    
+                    part_path.replace(file_path)
+                    logger.success(f"Successfully downloaded: {file_path.name}")
+                    return True, f"Downloaded: {file_path.name}"
                 
                 except asyncio.TimeoutError:
                     error_msg = f"Timeout downloading {url}"
-                    if attempt == self.download_settings.get("retry_attempts", 3) - 1:
-                        return False, error_msg
-                
+                except aiohttp.ClientResponseError as e:
+                    error_msg = e.message or f"HTTP {e.status} for {url}"
                 except Exception as e:
                     error_msg = f"Error downloading {url}: {str(e)}"
-                    if attempt == self.download_settings.get("retry_attempts", 3) - 1:
-                        return False, error_msg
                 
-                if attempt < self.download_settings.get("retry_attempts", 3) - 1:
-                    await asyncio.sleep(2 ** attempt)
+                logger.warning(f"Attempt {attempt + 1}/{retry_attempts} failed for {file_path.name}: {error_msg}")
+                if attempt == retry_attempts - 1:
+                    return False, error_msg
+                await asyncio.sleep(2 ** attempt)
         
         return False, "Max retries exceeded"
     
-    async def download_files(self, download_tasks: List[Tuple[str, Path]], 
+    async def _write_body(self, response, part_path: Path, mode: str, already: int,
+                          expected_size: Optional[int], file_id: str, display_name: str,
+                          progress_manager: ProgressManager):
+        """Stream a response body into part_path with a progress bar"""
+        progress = progress_manager.create_file_progress(file_id, display_name, expected_size or 0)
+        if already:
+            progress.update(already)
+        try:
+            async with aiofiles.open(part_path, mode) as f:
+                async for chunk in response.content.iter_chunked(1024 * 1024):
+                    await f.write(chunk)
+                    progress.update(len(chunk))
+        finally:
+            progress_manager.remove_file_progress(file_id)
+    
+    async def download_files(self, download_tasks: List[Tuple], 
                            progress_desc: str = "Downloading") -> List[Tuple[bool, str]]:
         """Download multiple files with concurrent progress tracking"""
         if not download_tasks:
@@ -213,8 +312,10 @@ class FileDownloader:
         try:
             # Create download tasks with progress manager
             tasks = []
-            for url, file_path in download_tasks:
-                task = self.download_file(url, file_path, semaphore, progress_manager)
+            for url, file_path, *rest in download_tasks:
+                # Tasks may carry a third item: {"size": bytes, "sha256": hex} to verify against
+                extra = {"expected": rest[0]} if rest and rest[0] else {}
+                task = self.download_file(url, file_path, semaphore, progress_manager, **extra)
                 tasks.append(task)
             
             # Execute downloads with overall progress bar

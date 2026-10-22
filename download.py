@@ -24,6 +24,16 @@ def ui_name(value: str) -> str:
     return ui
 
 
+def format_size(num_bytes: int) -> str:
+    """Human-readable file size, e.g. 6.46 GB"""
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.2f} {unit}"
+        size /= 1024
+    return f"{size:.2f} GB"
+
+
 # Environment variables checked for the CivitAI API key when --api-key is not given
 API_KEY_ENV_VARS = ("CAI_API_KEY", "CIVITAI_API_KEY")
 
@@ -132,6 +142,13 @@ Examples:
         "--flat",
         action="store_true",
         help="With --output, save every model directly in the output directory without type subfolders"
+    )
+    
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Check each file's SHA256 against CivitAI, both for new downloads and before "
+             "skipping existing files (slower for large models)"
     )
     
     parser.add_argument(
@@ -458,6 +475,61 @@ class CivitAIDownloaderCLI:
             print(f"❌ Error processing URL: {e}")
             raise
     
+    def get_download_settings(self) -> dict:
+        """Download settings from config.json with CLI overrides applied"""
+        download_settings = dict(self.config_manager.get_download_settings())
+        if getattr(self.args, 'verify', False):
+            download_settings["verify_hash"] = True
+        return download_settings
+    
+    def check_already_present(self, download_tasks: list) -> tuple:
+        """
+        Find models that are already fully downloaded before starting any downloads
+        
+        A file counts as present when it exists with exactly the size CivitAI
+        reports. Files whose size isn't known up front are left in the queue and
+        checked against the server's size when their download starts.
+        
+        Returns:
+            Tuple of (tasks still to download, number already present)
+        """
+        if not self.config_manager.get_download_settings().get("skip_existing_files", True):
+            return download_tasks, 0
+        
+        print("\n🔎 Checking for models that are already present...")
+        to_download = []
+        present = 0
+        for url, file_path, expected in download_tasks:
+            expected_size = (expected or {}).get('size')
+            part_path = file_path.with_name(file_path.name + ".part")
+            
+            if expected_size is None:
+                to_download.append((url, file_path, expected))
+                continue
+            
+            if file_path.exists():
+                actual_size = file_path.stat().st_size
+                if actual_size == expected_size:
+                    if getattr(self.args, 'verify', False):
+                        # Hash is checked by the downloader, which skips the file if it matches
+                        to_download.append((url, file_path, expected))
+                        print(f"  ✓ {file_path.name}: present ({format_size(actual_size)}), will verify hash")
+                    else:
+                        present += 1
+                        print(f"  ✓ {file_path.name}: already present ({format_size(actual_size)})")
+                    continue
+                print(f"  ↻ {file_path.name}: incomplete ({format_size(actual_size)} of "
+                      f"{format_size(expected_size)}), will re-download")
+            elif part_path.exists():
+                print(f"  ↻ {file_path.name}: partial download found ({format_size(part_path.stat().st_size)} of "
+                      f"{format_size(expected_size)}), will resume")
+            else:
+                print(f"  ↓ {file_path.name}: not present ({format_size(expected_size)})")
+            to_download.append((url, file_path, expected))
+        
+        logger.info(f"{present} model(s) already present, {len(to_download)} to download")
+        return to_download, present
+    
     def collect_urls(self) -> list:
         """Gather URLs from --url and --url-file, dropping duplicates while keeping order"""
         urls = list(getattr(self.args, 'urls', None) or [])
@@ -532,17 +604,22 @@ class CivitAIDownloaderCLI:
                     label = f"{label} ({target['version_name']})"
                 
                 # Different inputs (e.g. a model page and its download link) can point to the same file
-                if any(existing_path == file_path for _, existing_path in download_tasks):
+                if any(task[1] == file_path for task in download_tasks):
                     print(f"  = {label} already queued ({url})")
                     continue
                 
                 print(f"  ✓ {label} → {file_path}")
-                download_tasks.append((target['download_url'], file_path))
+                expected = {'size': target.get('file_size'), 'sha256': target.get('file_sha256')}
+                download_tasks.append((target['download_url'], file_path, expected))
+        
+        download_tasks, already_present = self.check_already_present(download_tasks)
         
         if not download_tasks:
+            if already_present:
+                print(f"\nNothing to download: all {already_present} model(s) are already present.")
             return 0, failed
         
-        download_settings = self.config_manager.get_download_settings()
+        download_settings = self.get_download_settings()
         async with FileDownloader(api_key, download_settings) as downloader:
             results = await downloader.download_files(download_tasks, "URL Downloads")
         
@@ -552,7 +629,7 @@ class CivitAIDownloaderCLI:
         
         print(f"\nURL Download Summary:")
         print(f"  Downloaded: {downloaded}")
-        print(f"  Skipped (already exist): {skipped}")
+        print(f"  Skipped (already exist): {skipped + already_present}")
         print(f"  Failed: {failed}")
         for success, message in results:
             if not success:
@@ -618,7 +695,7 @@ class CivitAIDownloaderCLI:
         
         # Download files with progress tracking
         api_key = self.config_manager.get_api_key()
-        download_settings = self.config_manager.get_download_settings()
+        download_settings = self.get_download_settings()
         max_concurrent = download_settings.get("max_concurrent_downloads", 4)
         
         print(f"📊 Downloading {len(download_tasks)} {model_type} files (max {max_concurrent} concurrent)")
