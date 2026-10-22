@@ -284,6 +284,12 @@ class URLPreprocessor:
         return False, error_msg
     
     @staticmethod
+    def file_size_bytes(file: Optional[Dict[str, Any]]) -> Optional[int]:
+        """Exact file size in bytes from CivitAI's sizeKB (bytes / 1024)"""
+        size_kb = (file or {}).get('sizeKB')
+        return round(size_kb * 1024) if size_kb else None
+    
+    @staticmethod
     def pick_primary_file(version_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Pick the file CivitAI serves by default for a model version"""
         files = version_data.get('files') or []
@@ -292,6 +298,31 @@ class URLPreprocessor:
                 return file
         return files[0] if files else None
     
+    def pick_requested_file(self, version_data: Dict[str, Any], url: str) -> Optional[Dict[str, Any]]:
+        """
+        Pick the file a download link will serve
+        
+        Honours ?fileId= and ?type=/&format= on download links. Returns None when
+        the link's options don't identify exactly one file.
+        """
+        files = version_data.get('files') or []
+        query = parse_qs(urlparse(url).query) if self.url_patterns['download_url'].match(url) else {}
+        
+        if 'fileId' in query:
+            return next((f for f in files if str(f.get('id')) == query['fileId'][0]), None)
+        
+        file_type = query.get('type', [None])[0]
+        file_format = query.get('format', [None])[0]
+        if file_type or file_format:
+            matches = [
+                f for f in files
+                if (not file_type or str(f.get('type', '')).lower() == file_type.lower())
+                and (not file_format or str((f.get('metadata') or {}).get('format', '')).lower() == file_format.lower())
+            ]
+            return matches[0] if len(matches) == 1 else None
+        
+        return self.pick_primary_file(version_data)
+    
     async def resolve_download_target(self, session: aiohttp.ClientSession, url: str) -> Tuple[bool, Any]:
         """
         Resolve a URL/ID/name to everything needed to download it
@@ -299,7 +330,8 @@ class URLPreprocessor:
         Returns:
             Tuple of (success, target_dict_or_error_message). The target dict contains
             download_url, model_id, model_version_id, model_name, version_name,
-            model_type and file_name (any of which except download_url may be None).
+            model_type, file_name, file_size (bytes) and file_sha256 (any of which
+            except download_url may be None).
         """
         url = self.sanitize_url(url)
         url_type, data = self.identify_url_type(url)
@@ -353,13 +385,15 @@ class URLPreprocessor:
                     'version_name': None,
                     'model_type': None,
                     'file_name': None,
+                    'file_size': None,
+                    'file_sha256': None,
                 }
             error_msg = f"Could not resolve URL to download link: {url}"
             logger.error(error_msg)
             return False, error_msg
         
         model_info = version_data.get('model') or {}
-        primary_file = self.pick_primary_file(version_data)
+        requested_file = self.pick_requested_file(version_data, url)
         
         # Keep the user's own download link, since its query string can select a specific file
         if url_type == 'download_url':
@@ -383,7 +417,9 @@ class URLPreprocessor:
             'model_name': model_info.get('name') or (model_data or {}).get('name'),
             'version_name': version_data.get('name'),
             'model_type': model_info.get('type') or (model_data or {}).get('type'),
-            'file_name': primary_file.get('name') if primary_file else None,
+            'file_name': requested_file.get('name') if requested_file else None,
+            'file_size': self.file_size_bytes(requested_file),
+            'file_sha256': ((requested_file or {}).get('hashes') or {}).get('SHA256'),
         }
         logger.success(f"Resolved {url} to {download_url}")
         return True, target

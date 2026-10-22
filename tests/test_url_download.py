@@ -291,3 +291,37 @@ class TestMangledInput:
         params = session.get.call_args.kwargs["params"]
         assert all(isinstance(value, (str, int, float)) and not isinstance(value, bool)
                    for value in params.values())
+
+
+class TestRequestedFile:
+    """Expected size and hash come from the file the link actually serves"""
+
+    VERSION = {
+        "id": 1, "modelId": 2, "downloadUrl": "https://civitai.red/api/download/models/1",
+        "model": {"name": "M", "type": "Checkpoint"},
+        "files": [
+            {"id": 10, "name": "m_fp16.safetensors", "primary": True, "sizeKB": 2.0, "type": "Model",
+             "metadata": {"format": "SafeTensor", "fp": "fp16"}, "hashes": {"SHA256": "AAA"}},
+            {"id": 11, "name": "m.ckpt", "primary": False, "sizeKB": 3.5, "type": "Model",
+             "metadata": {"format": "PickleTensor"}, "hashes": {"SHA256": "BBB"}},
+        ],
+    }
+
+    @pytest.mark.parametrize("url, name, size, sha", [
+        ("https://civitai.red/models/2", "m_fp16.safetensors", 2048, "AAA"),
+        ("https://civitai.red/api/download/models/1?fileId=11", "m.ckpt", 3584, "BBB"),
+        ("https://civitai.red/api/download/models/1?type=Model&format=PickleTensor", "m.ckpt", 3584, "BBB"),
+        ("https://civitai.red/api/download/models/1?type=Model", None, None, None),
+    ])
+    @pytest.mark.asyncio
+    async def test_requested_file(self, url, name, size, sha):
+        preprocessor = URLPreprocessor()
+        preprocessor.get_model_version_info = AsyncMock(return_value=self.VERSION)
+        preprocessor.get_model_info = AsyncMock(return_value={"id": 2, "modelVersions": [self.VERSION]})
+
+        success, target = await preprocessor.resolve_download_target(MagicMock(), url)
+
+        assert success
+        assert target["file_name"] == name
+        assert target["file_size"] == size
+        assert target["file_sha256"] == sha
