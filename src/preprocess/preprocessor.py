@@ -9,7 +9,7 @@ import asyncio
 import aiohttp
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Any
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 from loguru import logger
 
 from ..config.urls import CIVITAI_API_BASE, CIVITAI_HOST_PATTERN, download_url_for, to_civitai_host
@@ -30,6 +30,43 @@ class URLPreprocessor:
             'model_id_only': re.compile(r'^(\d+)$'),
             'short_url': re.compile(CIVITAI_HOST_PATTERN + r'/models/(\d+)/?$'),
         }
+    
+    # Query parameters CivitAI expects to be numeric IDs
+    NUMERIC_QUERY_PARAMS = ('fileId', 'modelVersionId', 'modelId')
+    
+    def sanitize_url(self, url: str) -> str:
+        """
+        Repair numeric ID query parameters on CivitAI links
+        
+        A link pasted without a separator can pick up trailing text, e.g.
+        "...?fileId=2721540python". Keep the leading digits of such values and
+        drop parameters that have none, so the link still downloads.
+        """
+        url = url.strip()
+        if not self.url_patterns['download_url'].match(url) and not self.url_patterns['model_page'].match(url):
+            return url
+        
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        
+        changed = False
+        params = []
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+            if key in self.NUMERIC_QUERY_PARAMS and not value.isdigit():
+                digits = re.match(r'\d+', value)
+                changed = True
+                if digits:
+                    logger.warning(f"Ignoring trailing text '{value[digits.end():]}' after {key}={digits.group()} in {url}")
+                    value = digits.group()
+                else:
+                    logger.warning(f"Dropping invalid {key}='{value}' from {url}")
+                    continue
+            params.append((key, value))
+        
+        if not changed:
+            return url
+        return parsed._replace(query=urlencode(params)).geturl()
     
     def identify_url_type(self, url: str) -> Tuple[str, Dict[str, str]]:
         """
@@ -129,7 +166,7 @@ class URLPreprocessor:
         params = {
             'query': query,
             'limit': 10,
-            'primaryFileOnly': True
+            'primaryFileOnly': 'true'
         }
         headers = {}
         
@@ -184,6 +221,7 @@ class URLPreprocessor:
         Returns:
             Tuple of (success, download_url_or_error_message)
         """
+        url = self.sanitize_url(url)
         url_type, data = self.identify_url_type(url)
         
         logger.debug(f"Processing URL type '{url_type}' for: {url}")
@@ -263,7 +301,7 @@ class URLPreprocessor:
             download_url, model_id, model_version_id, model_name, version_name,
             model_type and file_name (any of which except download_url may be None).
         """
-        url = url.strip()
+        url = self.sanitize_url(url)
         url_type, data = self.identify_url_type(url)
         logger.debug(f"Resolving download target for URL type '{url_type}': {url}")
         
@@ -285,11 +323,23 @@ class URLPreprocessor:
                 )
         
         if version_data is None and model_data is None and url_type == 'unknown':
-            search_results = await self.search_models(session, url)
-            if search_results:
-                model_data = search_results[0]
+            # Only accept an exact name match, so stray words on the command line
+            # (e.g. "download.py") can't download whatever the search ranks first
+            search_results = await self.search_models(session, url) or []
+            model_data = next(
+                (m for m in search_results if m.get('name', '').strip().lower() == url.lower()),
+                None
+            )
+            if model_data:
                 versions = model_data.get('modelVersions') or []
                 version_data = versions[0] if versions else None
+            else:
+                suggestions = ", ".join(f"'{m.get('name')}' ({m.get('id')})" for m in search_results[:3])
+                error_msg = f"No model named '{url}' on CivitAI"
+                if suggestions:
+                    error_msg += f". Closest matches: {suggestions}. Pass a model ID or URL instead"
+                logger.error(error_msg)
+                return False, error_msg
         
         if version_data is None:
             # A direct download link still works without metadata

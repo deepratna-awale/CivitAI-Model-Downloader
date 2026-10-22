@@ -218,3 +218,76 @@ class TestCivitaiHost:
 
     def test_download_url_for(self):
         assert download_url_for(42) == "https://civitai.red/api/download/models/42"
+
+
+class TestMangledInput:
+    """Links and stray words from a mistyped command line"""
+
+    @pytest.mark.parametrize("url, expected", [
+        ("https://civitai.red/api/download/models/2835136?fileId=2721540python",
+         "https://civitai.red/api/download/models/2835136?fileId=2721540"),
+        ("https://civitai.red/api/download/models/1?type=Model&fileId=abc",
+         "https://civitai.red/api/download/models/1?type=Model"),
+        ("https://civitai.red/models/4201?modelVersionId=130072x",
+         "https://civitai.red/models/4201?modelVersionId=130072"),
+        ("https://civitai.red/api/download/models/1?fileId=2&format=SafeTensor",
+         "https://civitai.red/api/download/models/1?fileId=2&format=SafeTensor"),
+        ("https://example.com/x?fileId=1abc", "https://example.com/x?fileId=1abc"),
+        ("download.py", "download.py"),
+    ])
+    def test_sanitize_url(self, url, expected):
+        assert URLPreprocessor().sanitize_url(url) == expected
+
+    @pytest.mark.asyncio
+    async def test_mangled_and_clean_links_resolve_to_same_download(self):
+        preprocessor = URLPreprocessor()
+        preprocessor.get_model_version_info = AsyncMock(return_value=VERSION_DATA)
+
+        _, mangled = await preprocessor.resolve_download_target(
+            MagicMock(), "https://civitai.red/api/download/models/130072?fileId=2721540python"
+        )
+        _, clean = await preprocessor.resolve_download_target(
+            MagicMock(), "https://civitai.red/api/download/models/130072?fileId=2721540"
+        )
+
+        assert mangled["download_url"] == clean["download_url"] == \
+            "https://civitai.red/api/download/models/130072?fileId=2721540"
+
+    @pytest.mark.asyncio
+    async def test_name_search_needs_exact_match(self):
+        preprocessor = URLPreprocessor()
+        preprocessor.search_models = AsyncMock(return_value=[{"id": 1, "name": "Some Other Model", "modelVersions": []}])
+
+        success, message = await preprocessor.resolve_download_target(MagicMock(), "download.py")
+
+        assert success is False
+        assert "No model named 'download.py'" in message
+        assert "'Some Other Model' (1)" in message
+
+    @pytest.mark.asyncio
+    async def test_name_search_exact_match_downloads(self):
+        preprocessor = URLPreprocessor()
+        preprocessor.search_models = AsyncMock(return_value=[
+            {"id": 2, "name": "Realistic Vision Extra", "modelVersions": []},
+            MODEL_DATA,
+        ])
+
+        success, target = await preprocessor.resolve_download_target(MagicMock(), "realistic vision")
+
+        assert success is True
+        assert target["model_id"] == "4201"
+        assert target["download_url"] == "https://civitai.red/api/download/models/999"
+
+    @pytest.mark.asyncio
+    async def test_search_params_are_valid_query_values(self):
+        session = MagicMock()
+        response = MagicMock(status=200)
+        response.json = AsyncMock(return_value={"items": []})
+        session.get.return_value.__aenter__ = AsyncMock(return_value=response)
+        session.get.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        await URLPreprocessor().search_models(session, "anything")
+
+        params = session.get.call_args.kwargs["params"]
+        assert all(isinstance(value, (str, int, float)) and not isinstance(value, bool)
+                   for value in params.values())
