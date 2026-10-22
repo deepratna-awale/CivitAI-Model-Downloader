@@ -10,6 +10,20 @@ import sys
 import argparse
 from pathlib import Path
 
+# UI names accepted by --ui (see src/config/ui_presets.py for the folder layouts)
+UI_CHOICES = ("a1111", "forge", "reforge", "sdnext", "comfyui", "fooocus", "swarmui")
+
+def ui_name(value: str) -> str:
+    """argparse type for --ui: accepts preset names and common aliases (e.g. 'next', 'comfy')"""
+    from src.config.ui_presets import normalize_ui
+    ui = normalize_ui(value)
+    if not ui:
+        raise argparse.ArgumentTypeError(
+            f"unknown UI '{value}' (choose from {', '.join(UI_CHOICES)})"
+        )
+    return ui
+
+
 # Environment variables checked for the CivitAI API key when --api-key is not given
 API_KEY_ENV_VARS = ("CAI_API_KEY", "CIVITAI_API_KEY")
 
@@ -31,6 +45,7 @@ Examples:
   %(prog)s --url "https://civitai.red/api/download/models/130072" --type lora --sd ~/stable-diffusion-webui
   %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --output ~/Downloads/models
   %(prog)s --url URL1 URL2 URL3 --sd ~/stable-diffusion-webui
+  %(prog)s --url URL1 URL2 --sd ~/ComfyUI --ui comfyui
   %(prog)s --url-file my-models.txt --output ~/Downloads/models
   %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --resolve-only
         """,
@@ -41,7 +56,17 @@ Examples:
         "--sd", "--stable-diffusion",
         dest="sd_path",
         type=str,
-        help="Path to Stable Diffusion installation directory"
+        help="Path to the Stable Diffusion UI installation directory (A1111, Forge, ComfyUI, ...)"
+    )
+    
+    parser.add_argument(
+        "--ui",
+        dest="ui",
+        type=ui_name,
+        metavar="UI",
+        help=f"Which UI is installed at --sd ({', '.join(UI_CHOICES)}), so models go into "
+             "that UI's folders. "
+             "Detected from the install when omitted (falls back to config.json's model_paths)"
     )
     
     parser.add_argument(
@@ -99,7 +124,8 @@ Examples:
         dest="output_dir",
         type=str,
         help="Directory to save --url downloads into instead of a Stable Diffusion install. "
-             "Models are sorted into a subfolder per type (e.g. OUTPUT/lora)"
+             "Models are sorted into a subfolder per type (e.g. OUTPUT/lora), or into the "
+             "--ui layout when --ui is given"
     )
     
     parser.add_argument(
@@ -172,6 +198,7 @@ setup_logging()
 
 
 # Import our modules
+from src.config.ui_presets import detect_ui
 from src import ConfigManager, CivitAIApiClient, FileDownloader, ModelManager, URLPreprocessor, preprocess_urls, process_single_url
 
 
@@ -187,6 +214,11 @@ class CivitAIDownloaderCLI:
             # Update the CSV directory path in config
             logger.info(f"Using CSV directory from CLI: {self.args.csvs_dir}")
             self.config_manager.set_csvs_directory(self.args.csvs_dir)
+        
+        # Apply UI layout from CLI if provided
+        if getattr(self.args, 'ui', None):
+            logger.info(f"Using {self.args.ui} folder layout from CLI")
+            self.config_manager.set_ui(self.args.ui)
         
         # Apply API key from CLI or environment if provided
         self.api_key_source = self.apply_api_key_override()
@@ -262,6 +294,27 @@ class CivitAIDownloaderCLI:
                     if confirm == 'y':
                         break
     
+    def apply_ui_layout(self, main_path: Path):
+        """Detect the UI at main_path when none was chosen via --ui or config.json"""
+        ui = self.args.ui if getattr(self.args, 'ui', None) else None
+        ui = ui or self.config_manager.config.get("ui")
+        if not ui:
+            ui = detect_ui(main_path)
+            if ui:
+                logger.info(f"Detected {ui} install at {main_path}")
+        self.config_manager.set_ui(ui)
+        ui = self.config_manager.get_ui()
+        
+        if ui:
+            print(f"Using {ui} folder layout")
+        else:
+            logger.info("No UI detected, using model_paths from config.json")
+    
+    def is_valid_ui_root(self, main_path: Path) -> bool:
+        """Check that main_path contains the top-level models folder of the active layout"""
+        checkpoint_dir = self.config_manager.get_model_paths().get("checkpoint", "models")
+        return (main_path / Path(checkpoint_dir).parts[0]).is_dir()
+    
     def get_stable_diffusion_path(self) -> Path | None:
         """Get and validate Stable Diffusion installation path"""
         logger.info("Starting Stable Diffusion path validation")
@@ -277,7 +330,8 @@ class CivitAIDownloaderCLI:
                 return None
             
             # Check if models folder exists (simplified validation)
-            if (main_path / "models").exists():
+            self.apply_ui_layout(main_path)
+            if self.is_valid_ui_root(main_path):
                 logger.success(f"Valid Stable Diffusion path found: {main_path}")
                 print(f"Using Stable Diffusion path: {main_path}")
                 return main_path
@@ -304,7 +358,8 @@ class CivitAIDownloaderCLI:
                 continue
             
             # Check if models folder exists (simplified validation)
-            if (main_path / "models").exists():
+            self.apply_ui_layout(main_path)
+            if self.is_valid_ui_root(main_path):
                 logger.success(f"Valid Stable Diffusion path found: {main_path}")
                 print("Valid Stable Diffusion path found.")
                 return main_path
@@ -457,7 +512,10 @@ class CivitAIDownloaderCLI:
                 
                 model_type = (model_type_override.lower() if model_type_override
                               else self.model_manager.model_type_key(target['model_type']))
-                if output_dir:
+                if output_dir and getattr(self.args, 'ui', None) and not flat:
+                    # Lay the output directory out like the chosen UI
+                    download_path = self.model_manager.get_download_path(model_type, output_dir)
+                elif output_dir:
                     download_path = output_dir if flat else output_dir / model_type
                     download_path.mkdir(parents=True, exist_ok=True)
                 else:
