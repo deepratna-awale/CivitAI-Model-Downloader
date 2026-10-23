@@ -24,6 +24,10 @@ jobs:
           civitai-download --help
           civitai-preprocess --help
           python -m civitai_downloader --help
+      - name: Check for undefined names
+        run: |
+          pip install pyflakes
+          python -m pyflakes civitai_downloader download.py preprocess.py | grep "undefined name" && exit 1 || true
       - name: Run tests
         run: python -m pytest
 
