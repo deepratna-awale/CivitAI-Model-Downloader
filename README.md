@@ -111,7 +111,7 @@ python download.py --help
 | `--resolve-only` | With `--url`, show the download URL and model info without downloading | `False` |
 
 ### Download by URL
-Paste any CivitAI link straight into the CLI. All API calls and downloads go through `https://civitai.red`; links copied from `civitai.com` or `civitai.green` are rewritten automatically. The model type (checkpoint, LoRA, embedding, ...) is looked up on CivitAI and the file is saved into the matching folder from `model_paths`, using the file's real name.
+Paste any CivitAI link straight into the CLI. Links stay on the site they were copied from: `civitai.com` links are looked up and downloaded on `civitai.com`, and `civitai.red` links on `civitai.red` (`civitai.green` links redirect to `civitai.com`). If a model isn't on that site, the other one is tried, so an NSFW model linked from `civitai.com` is still fetched from `civitai.red`. Bare model IDs and names start on `civitai.red`. The model type (checkpoint, LoRA, embedding, ...) is looked up on CivitAI and the file is saved into the matching folder from `model_paths`, using the file's real name.
 
 ```bash
 # Model page (latest version)

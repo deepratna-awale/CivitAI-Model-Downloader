@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from civitai_downloader.preprocess.preprocessor import URLPreprocessor, process_single_url
 from civitai_downloader.utils.model_manager import ModelManager
-from civitai_downloader.config.urls import to_civitai_host, download_url_for
+from civitai_downloader.config.urls import to_civitai_host, download_url_for, hosts_to_try
 
 
 VERSION_DATA = {
@@ -147,7 +147,7 @@ class TestResolveDownloadTarget:
         success, target = await preprocessor.resolve_download_target(MagicMock(), url)
 
         assert success is True
-        assert target["download_url"] == "https://civitai.red/api/download/models/130072"
+        assert target["download_url"] == "https://civitai.com/api/download/models/130072"
         assert target["model_type"] is None
         assert target["file_name"] is None
 
@@ -203,12 +203,12 @@ class TestModelTypeKey:
 
 
 class TestCivitaiHost:
-    """Requests go to civitai.red whatever host the link was copied from"""
+    """Links stay on their own CivitAI site, with the others as fallbacks"""
 
     @pytest.mark.parametrize("url, expected", [
-        ("https://civitai.com/api/download/models/1?type=Model", "https://civitai.red/api/download/models/1?type=Model"),
-        ("http://www.civitai.com/api/download/models/1", "https://civitai.red/api/download/models/1"),
-        ("https://civitai.green/models/1", "https://civitai.red/models/1"),
+        ("https://civitai.com/api/download/models/1?type=Model", "https://civitai.com/api/download/models/1?type=Model"),
+        ("http://www.civitai.com/api/download/models/1", "https://civitai.com/api/download/models/1"),
+        ("https://civitai.green/models/1", "https://civitai.com/models/1"),
         ("https://civitai.red/api/download/models/1", "https://civitai.red/api/download/models/1"),
         ("https://civitai.community/models/1", "https://civitai.community/models/1"),
         ("https://example.com/civitai.com/x", "https://example.com/civitai.com/x"),
@@ -216,8 +216,95 @@ class TestCivitaiHost:
     def test_to_civitai_host(self, url, expected):
         assert to_civitai_host(url) == expected
 
+    def test_to_civitai_host_moves_link(self):
+        assert to_civitai_host("https://www.civitai.com/api/download/models/1?fileId=2", "https://civitai.red") == \
+            "https://civitai.red/api/download/models/1?fileId=2"
+        assert to_civitai_host("https://example.com/x", "https://civitai.red") == "https://example.com/x"
+
+    @pytest.mark.parametrize("url, expected", [
+        ("https://civitai.com/models/1", ["https://civitai.com", "https://civitai.red"]),
+        ("http://www.civitai.green/models/1", ["https://civitai.com", "https://civitai.red"]),
+        ("https://civitai.red/models/1", ["https://civitai.red", "https://civitai.com"]),
+        ("4201", ["https://civitai.red", "https://civitai.com"]),
+        (None, ["https://civitai.red", "https://civitai.com"]),
+    ])
+    def test_hosts_to_try(self, url, expected):
+        assert hosts_to_try(url) == expected
+
     def test_download_url_for(self):
         assert download_url_for(42) == "https://civitai.red/api/download/models/42"
+        assert download_url_for(42, "https://civitai.com") == "https://civitai.com/api/download/models/42"
+
+
+def _session_with(statuses):
+    """A mock aiohttp session answering each requested host with the given status"""
+    session = MagicMock()
+    requested = []
+
+    def get(url, **kwargs):
+        requested.append(url)
+        host = next(h for h in statuses if url.startswith(h))
+        response = MagicMock(status=statuses[host])
+        response.json = AsyncMock(return_value=dict(VERSION_DATA, downloadUrl=f"{host}/api/download/models/130072"))
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=response)
+        context.__aexit__ = AsyncMock(return_value=None)
+        return context
+
+    session.get.side_effect = get
+    return session, requested
+
+
+class TestHostFallback:
+    """A model missing on the link's own site is looked up on the others"""
+
+    @pytest.mark.asyncio
+    async def test_own_host_is_used_when_it_has_the_model(self):
+        session, requested = _session_with({"https://civitai.com": 200, "https://civitai.red": 200})
+
+        success, target = await URLPreprocessor().resolve_download_target(
+            session, "https://civitai.com/models/4201?modelVersionId=130072")
+
+        assert success is True
+        assert requested == ["https://civitai.com/api/v1/model-versions/130072"]
+        assert target["download_url"] == "https://civitai.com/api/download/models/130072"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_another_host(self):
+        session, requested = _session_with({"https://civitai.com": 404, "https://civitai.red": 200})
+
+        success, target = await URLPreprocessor().resolve_download_target(
+            session, "https://civitai.com/api/download/models/130072?type=Model")
+
+        assert success is True
+        assert requested == ["https://civitai.com/api/v1/model-versions/130072",
+                             "https://civitai.red/api/v1/model-versions/130072"]
+        assert target["download_url"] == "https://civitai.red/api/download/models/130072?type=Model"
+
+    @pytest.mark.asyncio
+    async def test_download_stays_on_serving_host(self):
+        """civitai.red's model endpoint lists civitai.com download links"""
+        session = MagicMock()
+        response = MagicMock(status=200)
+        session.get.return_value.__aenter__ = AsyncMock(return_value=response)
+        session.get.return_value.__aexit__ = AsyncMock(return_value=None)
+        model = dict(MODEL_DATA, modelVersions=[dict(MODEL_DATA["modelVersions"][0],
+                                                     downloadUrl="https://civitai.com/api/download/models/999")])
+        response.json = AsyncMock(return_value=model)
+
+        success, target = await URLPreprocessor().resolve_download_target(session, "https://civitai.red/models/4201")
+
+        assert success is True
+        assert target["download_url"] == "https://civitai.red/api/download/models/999"
+
+    @pytest.mark.asyncio
+    async def test_missing_everywhere(self):
+        session, requested = _session_with({"https://civitai.com": 404, "https://civitai.red": 404})
+
+        success, message = await URLPreprocessor().resolve_download_target(session, "https://civitai.green/models/4201")
+
+        assert success is False
+        assert requested == ["https://civitai.com/api/v1/models/4201", "https://civitai.red/api/v1/models/4201"]
 
 
 class TestMangledInput:

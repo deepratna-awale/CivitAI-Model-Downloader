@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 from loguru import logger
 
-from ..config.urls import CIVITAI_API_BASE, download_url_for
+from ..config.urls import CIVITAI_API_BASE, api_base, download_url_for, hosts_to_try
 
 
 class CivitAIApiClient:
@@ -37,32 +37,36 @@ class CivitAIApiClient:
             await self.session.close()
     
     async def _make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
-        """Make API request to CivitAI"""
+        """Make API request to CivitAI, trying the other hosts when one doesn't have it"""
         if not self.session:
             raise RuntimeError("API client not initialized. Use async context manager.")
         
-        url = urljoin(self.BASE_URL, endpoint)
-        logger.debug(f"Making API request to: {url} with params: {params}")
+        for host in hosts_to_try():
+            url = urljoin(f"{api_base(host)}/", endpoint)
+            logger.debug(f"Making API request to: {url} with params: {params}")
+            
+            try:
+                async with self.session.get(url, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.debug(f"Successful API response from {endpoint} on {host}")
+                        return data
+                    elif response.status == 404:
+                        logger.debug(f"{endpoint} not found on {host}")
+                        continue
+                    else:
+                        logger.error(f"API request failed: {response.status} for {endpoint}")
+                        raise aiohttp.ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status
+                        )
+            except Exception as e:
+                logger.error(f"API request error for {endpoint}: {e}")
+                raise
         
-        try:
-            async with self.session.get(url, params=params) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Successful API response from {endpoint}")
-                    return data
-                elif response.status == 404:
-                    logger.warning(f"API endpoint not found: {endpoint}")
-                    return {}
-                else:
-                    logger.error(f"API request failed: {response.status} for {endpoint}")
-                    raise aiohttp.ClientResponseError(
-                        request_info=response.request_info,
-                        history=response.history,
-                        status=response.status
-                    )
-        except Exception as e:
-            logger.error(f"API request error for {endpoint}: {e}")
-            raise
+        logger.warning(f"API endpoint not found on any CivitAI host: {endpoint}")
+        return {}
     
     async def search_models_by_name(self, name: str, model_type: Optional[str] = None) -> List[Dict]:
         """Search for models by name"""

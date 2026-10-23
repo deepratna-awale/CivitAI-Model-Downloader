@@ -180,3 +180,48 @@ class TestFileDownloader:
             assert len(results) == 1
             assert results[0][0] is True  # Success
             assert "Downloaded successfully" in results[0][1]
+
+class TestDownloadHostFallback:
+    """A download link that 404s on its own CivitAI site is tried on the others"""
+
+    @pytest.mark.asyncio
+    async def test_falls_back_on_not_found(self, tmp_path):
+        downloader = FileDownloader(api_key="key")
+        downloader.aria2_path = None
+        downloader._download_with_aiohttp = AsyncMock(side_effect=[
+            (False, "File not found: https://civitai.com/api/download/models/1"),
+            (True, "Downloaded: model.safetensors"),
+        ])
+
+        success, message = await downloader.download_file(
+            "https://civitai.com/api/download/models/1?type=Model", tmp_path / "model.safetensors",
+            asyncio.Semaphore(1), MagicMock())
+
+        assert success is True
+        tried = [call.args[0] for call in downloader._download_with_aiohttp.call_args_list]
+        assert tried == ["https://civitai.com/api/download/models/1?type=Model",
+                         "https://civitai.red/api/download/models/1?type=Model"]
+
+    @pytest.mark.asyncio
+    async def test_other_errors_do_not_fall_back(self, tmp_path):
+        downloader = FileDownloader(api_key="key")
+        downloader.aria2_path = None
+        downloader._download_with_aiohttp = AsyncMock(return_value=(False, "Authentication failed"))
+
+        success, _ = await downloader.download_file(
+            "https://civitai.red/api/download/models/1", tmp_path / "m", asyncio.Semaphore(1), MagicMock())
+
+        assert success is False
+        assert downloader._download_with_aiohttp.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_reports_not_found_after_every_host(self, tmp_path):
+        downloader = FileDownloader(api_key="key")
+        downloader.aria2_path = None
+        downloader._download_with_aiohttp = AsyncMock(return_value=(False, "File not found: x"))
+
+        success, message = await downloader.download_file(
+            "https://civitai.green/api/download/models/1", tmp_path / "m", asyncio.Semaphore(1), MagicMock())
+
+        assert (success, message) == (False, "File not found: x")
+        assert downloader._download_with_aiohttp.call_count == 2
