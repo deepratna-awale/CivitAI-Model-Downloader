@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
+import aiohttp
 from loguru import logger
 
 from .config.ui_presets import detect_ui, normalize_ui
@@ -273,6 +274,11 @@ class CivitAIDownloaderCLI:
         # If API key was provided via CLI or environment, we're done
         if self.api_key_source:
             logger.info(f"API key configured via {self.api_key_source.upper()}")
+            return
+        
+        if api_key:
+            logger.info(f"Using API key from {self.config_manager.config_path} "
+                        f"(set {API_KEY_ENV_VARS[0]} or pass --api-key to override)")
             return
         
         if not api_key:

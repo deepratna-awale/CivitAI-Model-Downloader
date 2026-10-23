@@ -617,37 +617,6 @@ class URLPreprocessor:
                 return model_info.get('name', f"Model_{model_id}")
         
         return None
-        """
-        Process all CSV files in a directory
-        
-        Returns:
-            Dict mapping filename to (total_processed, successfully_resolved, failed_to_resolve)
-        """
-        if not csv_dir.exists():
-            logger.error(f"CSV directory not found: {csv_dir}")
-            return {}
-        
-        csv_files = list(csv_dir.glob("*.csv"))
-        if not csv_files:
-            logger.warning(f"No CSV files found in directory: {csv_dir}")
-            return {}
-        
-        logger.info(f"Found {len(csv_files)} CSV files to process")
-        
-        results = {}
-        for csv_file in csv_files:
-            if csv_file.name.lower() in ['template.csv', '_csv files go here.txt']:
-                logger.info(f"Skipping template file: {csv_file.name}")
-                continue
-            
-            logger.info(f"Processing: {csv_file.name}")
-            result = await self.process_csv_file(csv_file)
-            results[csv_file.name] = result
-        
-        return results
-
-
-        return None
 
 
     async def process_directory(self, csv_dir: Path) -> Dict[str, Tuple[int, int, int]]:
