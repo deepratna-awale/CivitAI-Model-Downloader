@@ -12,7 +12,7 @@ from typing import List, Tuple, Dict, Optional, Any
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 from loguru import logger
 
-from ..config.urls import CIVITAI_API_BASE, CIVITAI_HOST_PATTERN, download_url_for, to_civitai_host
+from ..config.urls import CIVITAI_API_BASE, CIVITAI_HOST_PATTERN, api_base, download_url_for, host_of, hosts_to_try, to_civitai_host
 
 
 class URLPreprocessor:
@@ -30,6 +30,9 @@ class URLPreprocessor:
             'model_id_only': re.compile(r'^(\d+)$'),
             'short_url': re.compile(CIVITAI_HOST_PATTERN + r'/models/(\d+)/?$'),
         }
+    
+    # Key added to API responses naming the CivitAI host that served them
+    HOST_KEY = '_civitai_host'
     
     # Query parameters CivitAI expects to be numeric IDs
     NUMERIC_QUERY_PARAMS = ('fileId', 'modelVersionId', 'modelId')
@@ -118,73 +121,68 @@ class URLPreprocessor:
         
         return 'unknown', {'original_url': url}
     
-    async def get_model_info(self, session: aiohttp.ClientSession, model_id: str) -> Optional[Dict[str, Any]]:
+    async def _get_json(self, session: aiohttp.ClientSession, path: str, what: str,
+                        hosts: List[str], params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        """
+        GET an API path from the first CivitAI host that has it
+
+        Hosts are tried in order and the next one is used whenever a host
+        doesn't answer with 200, so a model missing on one site is still found
+        on another. Returns None when no host has it.
+        """
+        headers = {}
+        if self.api_key:
+            headers['Authorization'] = f'Bearer {self.api_key}'
+        
+        for host in hosts:
+            url = f"{api_base(host)}/{path}"
+            try:
+                async with session.get(url, params=params, headers=headers) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        logger.debug(f"Retrieved {what} from {host}")
+                        if isinstance(data, dict):
+                            # The API's own downloadUrl isn't always on the host that answered
+                            data[self.HOST_KEY] = host
+                            for item in data.get('items') or []:
+                                item[self.HOST_KEY] = host
+                        return data
+                    logger.warning(f"Failed to get {what} from {host}: {response.status}")
+            except Exception as e:
+                logger.error(f"Error getting {what} from {host}: {e}")
+        return None
+    
+    async def get_model_info(self, session: aiohttp.ClientSession, model_id: str,
+                             hosts: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """Get model information from CivitAI API"""
-        url = f"{self.base_url}/models/{model_id}"
-        headers = {}
-        
-        if self.api_key:
-            headers['Authorization'] = f'Bearer {self.api_key}'
-        
-        try:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Retrieved model info for ID {model_id}")
-                    return data
-                else:
-                    logger.warning(f"Failed to get model info for ID {model_id}: {response.status}")
-                    return None
-        except Exception as e:
-            logger.error(f"Error getting model info for ID {model_id}: {e}")
-            return None
+        return await self._get_json(session, f"models/{model_id}", f"model info for ID {model_id}",
+                                    hosts or hosts_to_try())
     
-    async def get_model_version_info(self, session: aiohttp.ClientSession, version_id: str) -> Optional[Dict[str, Any]]:
+    async def get_model_version_info(self, session: aiohttp.ClientSession, version_id: str,
+                                     hosts: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
         """Get model version information from CivitAI API"""
-        url = f"{self.base_url}/model-versions/{version_id}"
-        headers = {}
-        
-        if self.api_key:
-            headers['Authorization'] = f'Bearer {self.api_key}'
-        
-        try:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Retrieved model version info for ID {version_id}")
-                    return data
-                else:
-                    logger.warning(f"Failed to get model version info for ID {version_id}: {response.status}")
-                    return None
-        except Exception as e:
-            logger.error(f"Error getting model version info for ID {version_id}: {e}")
-            return None
+        return await self._get_json(session, f"model-versions/{version_id}",
+                                    f"model version info for ID {version_id}", hosts or hosts_to_try())
     
-    async def search_models(self, session: aiohttp.ClientSession, query: str) -> Optional[List[Dict[str, Any]]]:
+    async def search_models(self, session: aiohttp.ClientSession, query: str,
+                            hosts: Optional[List[str]] = None) -> Optional[List[Dict[str, Any]]]:
         """Search for models by name"""
-        url = f"{self.base_url}/models"
         params = {
             'query': query,
             'limit': 10,
             'primaryFileOnly': 'true'
         }
-        headers = {}
-        
-        if self.api_key:
-            headers['Authorization'] = f'Bearer {self.api_key}'
-        
-        try:
-            async with session.get(url, params=params, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Search found {len(data.get('items', []))} models for query: {query}")
-                    return data.get('items', [])
-                else:
-                    logger.warning(f"Failed to search models for query '{query}': {response.status}")
-                    return None
-        except Exception as e:
-            logger.error(f"Error searching models for query '{query}': {e}")
-            return None
+        # A search that comes back empty on one host may still match on another
+        result = None
+        for host in hosts or hosts_to_try():
+            data = await self._get_json(session, "models", f"search results for '{query}'", [host], params)
+            if data is None:
+                continue
+            result = data.get('items', [])
+            logger.debug(f"Search on {host} found {len(result)} models for query: {query}")
+            if result:
+                break
+        return result
     
     def get_best_download_url(self, model_data: Dict[str, Any], preferred_version_id: Optional[str] = None) -> Optional[str]:
         """Extract the best download URL from model data"""
@@ -201,7 +199,7 @@ class URLPreprocessor:
                     download_url = version.get('downloadUrl')
                     if download_url:
                         logger.debug(f"Found download URL for specific version {preferred_version_id}")
-                        return download_url
+                        return to_civitai_host(download_url, model_data.get(self.HOST_KEY))
         
         # Otherwise, use the first version (usually the latest)
         first_version = model_versions[0]
@@ -209,7 +207,7 @@ class URLPreprocessor:
         
         if download_url:
             logger.debug(f"Using download URL from first version: {first_version.get('id')}")
-            return download_url
+            return to_civitai_host(download_url, model_data.get(self.HOST_KEY))
         
         logger.warning("No download URL found in model versions")
         return None
@@ -223,6 +221,7 @@ class URLPreprocessor:
         """
         url = self.sanitize_url(url)
         url_type, data = self.identify_url_type(url)
+        hosts = hosts_to_try(url)
         
         logger.debug(f"Processing URL type '{url_type}' for: {url}")
         
@@ -234,11 +233,12 @@ class URLPreprocessor:
         # Handle model version ID directly
         if url_type in ['model_version_page', 'query_version_id'] and 'model_version_id' in data:
             version_id = data['model_version_id']
-            version_info = await self.get_model_version_info(session, version_id)
+            version_info = await self.get_model_version_info(session, version_id, hosts)
             
             if version_info:
                 download_url = version_info.get('downloadUrl')
                 if download_url:
+                    download_url = to_civitai_host(download_url, version_info.get(self.HOST_KEY))
                     logger.success(f"Resolved version ID {version_id} to download URL")
                     return True, download_url
                 else:
@@ -249,7 +249,7 @@ class URLPreprocessor:
         # Handle model ID
         if url_type in ['model_page', 'model_id_only', 'query_model_id'] and 'model_id' in data:
             model_id = data['model_id']
-            model_info = await self.get_model_info(session, model_id)
+            model_info = await self.get_model_info(session, model_id, hosts)
             
             if model_info:
                 # Extract preferred version if available
@@ -267,7 +267,7 @@ class URLPreprocessor:
         # If we have a model name, try searching
         if model_name and url_type == 'unknown':
             logger.info(f"Attempting to search for model by name: {model_name}")
-            search_results = await self.search_models(session, model_name)
+            search_results = await self.search_models(session, model_name, hosts)
             
             if search_results and len(search_results) > 0:
                 # Use the first (most relevant) result
@@ -335,6 +335,7 @@ class URLPreprocessor:
         """
         url = self.sanitize_url(url)
         url_type, data = self.identify_url_type(url)
+        hosts = hosts_to_try(url)
         logger.debug(f"Resolving download target for URL type '{url_type}': {url}")
         
         model_data: Optional[Dict[str, Any]] = None
@@ -343,10 +344,10 @@ class URLPreprocessor:
         model_id = data.get('model_id')
         
         if version_id:
-            version_data = await self.get_model_version_info(session, version_id)
+            version_data = await self.get_model_version_info(session, version_id, hosts)
         
         if version_data is None and model_id:
-            model_data = await self.get_model_info(session, model_id)
+            model_data = await self.get_model_info(session, model_id, hosts)
             if model_data:
                 versions = model_data.get('modelVersions') or []
                 version_data = next(
@@ -357,7 +358,7 @@ class URLPreprocessor:
         if version_data is None and model_data is None and url_type == 'unknown':
             # Only accept an exact name match, so stray words on the command line
             # (e.g. "download.py") can't download whatever the search ranks first
-            search_results = await self.search_models(session, url) or []
+            search_results = await self.search_models(session, url, hosts) or []
             model_data = next(
                 (m for m in search_results if m.get('name', '').strip().lower() == url.lower()),
                 None
@@ -395,15 +396,19 @@ class URLPreprocessor:
         model_info = version_data.get('model') or {}
         requested_file = self.pick_requested_file(version_data, url)
         
+        # The host that had the model, which is a fallback when it isn't on the link's own site
+        found_on = (version_data.get(self.HOST_KEY) or (model_data or {}).get(self.HOST_KEY)
+                    or host_of(version_data.get('downloadUrl')) or hosts[0])
+        
         # Keep the user's own download link, since its query string can select a specific file
         if url_type == 'download_url':
-            download_url = to_civitai_host(url)
+            download_url = to_civitai_host(url, found_on)
         else:
             download_url = version_data.get('downloadUrl')
             if download_url:
-                download_url = to_civitai_host(download_url)
+                download_url = to_civitai_host(download_url, found_on)
             elif version_data.get('id'):
-                download_url = download_url_for(version_data['id'])
+                download_url = download_url_for(version_data['id'], found_on)
         
         if not download_url:
             error_msg = f"No download URL found for: {url}"

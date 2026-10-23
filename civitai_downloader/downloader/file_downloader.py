@@ -15,7 +15,7 @@ from tqdm.asyncio import tqdm
 from loguru import logger
 import threading
 
-from ..config.urls import to_civitai_host
+from ..config.urls import host_of, hosts_to_try, to_civitai_host
 
 
 class ProgressManager:
@@ -223,12 +223,22 @@ class FileDownloader:
             if skip_message:
                 return True, skip_message
         
+        # A link missing on its own CivitAI site may still be on one of the others
+        request_urls = [to_civitai_host(url, host) for host in hosts_to_try(url)] if host_of(url) else [url]
+        
         async with semaphore:
-            if self.aria2_path:
-                return await self._download_with_aria2(url, file_path, progress_manager,
-                                                       expected_size, expected_sha256)
-            return await self._download_with_aiohttp(url, file_path, progress_manager,
-                                                     expected_size, expected_sha256, checked_path)
+            for index, request_url in enumerate(request_urls):
+                if self.aria2_path:
+                    success, message = await self._download_with_aria2(request_url, file_path, progress_manager,
+                                                                       expected_size, expected_sha256)
+                else:
+                    success, message = await self._download_with_aiohttp(request_url, file_path, progress_manager,
+                                                                         expected_size, expected_sha256, checked_path)
+                if success or not message.startswith("File not found") or index == len(request_urls) - 1:
+                    return success, message
+                logger.info(f"{file_path.name} not found on {host_of(request_url)}, "
+                            f"trying {host_of(request_urls[index + 1])}")
+            return success, message
     
     async def _download_with_aria2(self, url: str, file_path: Path, progress_manager: ProgressManager,
                                    expected_size: Optional[int], expected_sha256: Optional[str]) -> Tuple[bool, str]:
