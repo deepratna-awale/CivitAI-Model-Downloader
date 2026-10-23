@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 # Base model types in the bundled list
 EXPRESSION_MODEL_TYPES = ("pony", "illustrious", "sdxl", "sd15", "flux")
 
-# Other spellings accepted for --expression-loras
+# Other spellings accepted for --ae-expression-loras
 _ALIASES = {
     "illu": "illustrious",
     "noobai": "illustrious",

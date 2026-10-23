@@ -1,5 +1,5 @@
 """
-Tests for the bundled AutoExpress expression LoRA list and --expression-loras
+Tests for the bundled AutoExpress expression LoRA list and --ae-expression-loras
 """
 
 import argparse
@@ -68,14 +68,17 @@ class TestArguments:
         assert parse().expression_loras is None
 
     def test_flag_without_types_means_all(self):
-        assert parse("--expression-loras", "--sd", "x").expression_loras == []
+        assert parse("--sd", "ComfyUI", "--ae-expression-loras").expression_loras == []
 
     def test_flag_with_types(self):
-        assert parse("--expression-loras", "pony", "noobai").expression_loras == ["pony", "illustrious"]
+        assert parse("--ae-expression-loras", "pony", "noobai").expression_loras == ["pony", "illustrious"]
+
+    def test_short_alias(self):
+        assert parse("--expression-loras", "flux").expression_loras == ["flux"]
 
     def test_unknown_type_is_rejected(self):
         with pytest.raises(SystemExit):
-            parse("--expression-loras", "sd3")
+            parse("--ae-expression-loras", "sd3")
 
 
 class TestDownload:

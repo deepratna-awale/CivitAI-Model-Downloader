@@ -32,7 +32,7 @@ def ui_name(value: str) -> str:
 
 
 def expression_type(value: str) -> str:
-    """argparse type for --expression-loras: accepts base model types and aliases (e.g. 'noobai', 'sd1.5')"""
+    """argparse type for --ae-expression-loras: accepts base model types and aliases (e.g. 'noobai', 'sd1.5')"""
     model_type = normalize_expression_type(value)
     if not model_type:
         raise argparse.ArgumentTypeError(
@@ -75,8 +75,8 @@ Examples:
   %(prog)s --url URL1 URL2 --sd ~/ComfyUI --ui comfyui
   %(prog)s --url-file my-models.txt --output ~/Downloads/models
   %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --resolve-only
-  %(prog)s --expression-loras --sd ~/ComfyUI
-  %(prog)s --expression-loras pony illustrious --sd ~/stable-diffusion-webui
+  %(prog)s --sd ~/ComfyUI --ae-expression-loras
+  %(prog)s --ae-expression-loras pony illustrious --sd ~/stable-diffusion-webui
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -141,7 +141,7 @@ Examples:
     )
     
     parser.add_argument(
-        "--expression-loras",
+        "--ae-expression-loras", "--expression-loras",
         dest="expression_loras",
         nargs="*",
         type=expression_type,
@@ -584,7 +584,7 @@ class CivitAIDownloaderCLI:
         return unique_urls
     
     def collect_expression_loras(self) -> list:
-        """Expression LoRAs selected with --expression-loras (empty when the flag is absent)"""
+        """Expression LoRAs selected with --ae-expression-loras (empty when the flag is absent)"""
         model_types = getattr(self.args, 'expression_loras', None)
         if model_types is None:
             return []

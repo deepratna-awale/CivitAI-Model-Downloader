@@ -102,7 +102,7 @@ python download.py --help
 | `--preprocess` | Preprocess URLs before downloading | `False` |
 | `--url`, `--urls` | Download one or more models from CivitAI URLs, model IDs or names | None |
 | `--url-file` | Text file with one URL/ID/name per line (`#` comments allowed) | None |
-| `--expression-loras` | Download the AutoExpress expression LoRAs into the LoRA folder, optionally only for some base models (`pony`, `illustrious`, `sdxl`, `sd15`, `flux`) | All when no type is given |
+| `--ae-expression-loras` | Download the AutoExpress expression LoRAs into the LoRA folder, optionally only for some base models (`pony`, `illustrious`, `sdxl`, `sd15`, `flux`) | All when no type is given |
 | `--type` | Force every `--url` download into one model type folder (e.g. `lora`) | Detected from CivitAI |
 | `-o`, `--output` | Folder to save `--url` downloads into, with a subfolder per type, or the `--ui` layout if given (no `--sd` needed) | None |
 | `--flat` | With `--output`, skip the per-type subfolders | `False` |
@@ -190,7 +190,7 @@ python download.py --sd ~/sdnext --ui next --url-file my-models.txt
 ```
 
 ### AutoExpress expression LoRAs
-`--expression-loras` downloads the optional expression LoRAs used by [AutoExpress](https://github.com/deepratna-awale/AutoExpress) into the LoRA folder of the chosen UI. With no value it fetches all of them; name one or more base models to fetch only those (`noobai`, `xl` and `sd1.5` work as aliases).
+`--ae-expression-loras` downloads the optional expression LoRAs used by [AutoExpress](https://github.com/deepratna-awale/AutoExpress) into the LoRA folder of the chosen UI. With no value it fetches all of them; name one or more base models to fetch only those (`noobai`, `xl` and `sd1.5` work as aliases).
 
 | Model type | LoRA | Trigger | Weight | Size |
 | --- | --- | --- | --- | --- |
@@ -202,9 +202,9 @@ python download.py --sd ~/sdnext --ui next --url-file my-models.txt
 | Flux | [Expression Helper 2.0](https://civitai.red/models/914282?modelVersionId=1023284) by Lara_De_Martin | none | 0.8 | 73 MB |
 
 ```bash
-civitai-download --expression-loras --sd ~/ComfyUI
-civitai-download --expression-loras pony illustrious --sd ~/stable-diffusion-webui
-civitai-download --expression-loras sdxl -o ./models --ui forge
+civitai-download --sd ~/ComfyUI --ae-expression-loras
+civitai-download --ae-expression-loras pony illustrious --sd ~/stable-diffusion-webui
+civitai-download --ae-expression-loras sdxl -o ./models --ui forge
 ```
 
 Files keep their CivitAI names, which AutoExpress recognizes. The list is a copy of `autoexpress_core/resources/expression_loras.json` from AutoExpress, bundled at `civitai_downloader/resources/expression_loras.json`.
