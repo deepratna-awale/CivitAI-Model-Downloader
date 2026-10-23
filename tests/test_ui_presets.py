@@ -5,9 +5,9 @@ Tests for per-UI model folder layouts
 import json
 import pytest
 
-from src.config.manager import ConfigManager
-from src.config.ui_presets import UI_PRESETS, detect_ui, normalize_ui
-from src.utils.model_manager import ModelManager
+from civitai_downloader.config.manager import ConfigManager
+from civitai_downloader.config.ui_presets import UI_PRESETS, detect_ui, normalize_ui
+from civitai_downloader.utils.model_manager import ModelManager
 
 
 class TestNormalizeUi:

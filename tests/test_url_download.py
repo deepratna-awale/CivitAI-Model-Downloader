@@ -5,9 +5,9 @@ Tests for downloading models directly from CivitAI URLs
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.preprocess.preprocessor import URLPreprocessor, process_single_url
-from src.utils.model_manager import ModelManager
-from src.config.urls import to_civitai_host, download_url_for
+from civitai_downloader.preprocess.preprocessor import URLPreprocessor, process_single_url
+from civitai_downloader.utils.model_manager import ModelManager
+from civitai_downloader.config.urls import to_civitai_host, download_url_for
 
 
 VERSION_DATA = {

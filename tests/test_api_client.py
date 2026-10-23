@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from src.api.client import CivitAIApiClient
+from civitai_downloader.api.client import CivitAIApiClient
 
 
 class TestCivitAIApiClient:
@@ -95,10 +95,10 @@ class TestCivitAIApiClient:
     
     @pytest.mark.asyncio
     async def test_make_request_http_error(self):
-        """Test API request with HTTP error"""
+        """Test API request with HTTP error (404s return {} instead, see _make_request)"""
         mock_response = AsyncMock()
-        mock_response.status = 404
-        mock_response.text = AsyncMock(return_value="Not Found")
+        mock_response.status = 500
+        mock_response.text = AsyncMock(return_value="Internal Server Error")
         mock_response.request_info = AsyncMock()
         mock_response.history = AsyncMock()
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
@@ -112,7 +112,7 @@ class TestCivitAIApiClient:
         client = CivitAIApiClient(api_key="test_key")
         client.session = mock_session  # Direct assignment
         with pytest.raises(aiohttp.ClientResponseError):
-            await client._make_request("models/nonexistent")
+            await client._make_request("models/123")
 
     @pytest.mark.asyncio
     async def test_make_request_timeout(self):

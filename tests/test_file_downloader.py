@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 import threading
 
-from src.downloader.file_downloader import ProgressManager, FileDownloader
+from civitai_downloader.downloader.file_downloader import ProgressManager, FileDownloader
 
 
 class TestProgressManager:
@@ -25,7 +25,7 @@ class TestProgressManager:
         assert isinstance(manager.lock, type(threading.Lock()))
         assert manager.overall_pbar is None
     
-    @patch('src.downloader.file_downloader.tqdm')
+    @patch('civitai_downloader.downloader.file_downloader.tqdm')
     def test_create_file_progress_with_size(self, mock_tqdm):
         """Test creating file progress bar with known size"""
         mock_pbar = MagicMock()
@@ -42,7 +42,7 @@ class TestProgressManager:
         assert call_args['position'] == 1
         assert "test_file.txt" in call_args['desc']
     
-    @patch('src.downloader.file_downloader.tqdm')
+    @patch('civitai_downloader.downloader.file_downloader.tqdm')
     def test_create_file_progress_without_size(self, mock_tqdm):
         """Test creating file progress bar without known size"""
         mock_pbar = MagicMock()

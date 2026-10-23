@@ -16,14 +16,14 @@ except ImportError as e:
     raise
 
 try:
-    from src.config.manager import ConfigManager
-    from src.api.client import CivitAIApiClient
-    from src.preprocess.preprocessor import URLPreprocessor
-    from src.utils.model_manager import ModelManager, CSVProcessor
-    from src.downloader.file_downloader import FileDownloader, ProgressManager
+    from civitai_downloader.config.manager import ConfigManager
+    from civitai_downloader.api.client import CivitAIApiClient
+    from civitai_downloader.preprocess.preprocessor import URLPreprocessor
+    from civitai_downloader.utils.model_manager import ModelManager, CSVProcessor
+    from civitai_downloader.downloader.file_downloader import FileDownloader, ProgressManager
 except ImportError as e:
     print(f"Import error for source modules: {e}")
-    print("Make sure the src modules are available in PYTHONPATH")
+    print("Make sure the civitai_downloader package is available in PYTHONPATH")
     raise
 
 

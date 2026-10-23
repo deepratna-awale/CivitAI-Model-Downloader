@@ -17,11 +17,26 @@ A professional, async multi-threaded downloader for CivitAI models with intellig
 ## 🚀 Quick Start
 
 ### 1. Installation
+
+Install it as a command with pip:
 ```bash
-git clone https://github.com/deepratnaawale/CivitAI-Model-Downloader.git
+pip install git+https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
+```
+
+This adds two commands, `civitai-download` (the downloader, same options as `python download.py`) and `civitai-preprocess` (the standalone URL preprocessor). `python -m civitai_downloader` works too. `config.json`, the `CSVs` folder and `downloads.log` are read from and written to the directory you run the command in.
+
+Or run it from a clone:
+```bash
+git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
 cd CivitAI-Model-Downloader
 pip install -r requirements.txt
 ```
+
+To use it from another Python project, add it as a dependency (for example in `requirements.txt`):
+```
+civitai-bulk-downloader @ git+https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
+```
+and import it with `from civitai_downloader import CivitAIApiClient, FileDownloader, URLPreprocessor`.
 
 ### 2. Get Your API Key
 Visit [CivitAI Account Settings](https://civitai.com/user/account) and create an API token.
@@ -30,6 +45,9 @@ Visit [CivitAI Account Settings](https://civitai.com/user/account) and create an
 ```bash
 # Interactive mode (recommended for first-time users)
 python download.py
+
+# Same thing with the pip-installed command
+civitai-download --sd ~/stable-diffusion-webui --url "https://civitai.red/models/4201"
 
 # Automated mode
 python download.py --sd /path/to/stable-diffusion --api-key your-api-key
@@ -43,9 +61,9 @@ python download.py --url "https://civitai.red/models/4201?modelVersionId=130072"
 
 ## 📋 Requirements
 
-- **Python**: 3.8+ (3.11+ recommended)
+- **Python**: 3.9+ (3.11+ recommended)
 - **CivitAI API Key**: Required for authentication
-- **Dependencies**: Auto-installed or via `pip install -r requirements.txt`
+- **Dependencies**: Installed automatically by `pip install`, or via `pip install -r requirements.txt`
   - `aiohttp` - Async HTTP client
   - `aiofiles` - Async file operations  
   - `tqdm` - Progress bars
@@ -196,7 +214,7 @@ python download.py --preprocess --api-key your-api-key
 
 ```
 CivitAI-Model-Downloader/
-├── 📁 src/                    # Source code
+├── 📁 civitai_downloader/     # Source package (installed by pip)
 │   ├── 📁 api/               # CivitAI API client
 │   ├── 📁 config/            # Configuration management
 │   ├── 📁 downloader/        # Download engine
@@ -204,10 +222,11 @@ CivitAI-Model-Downloader/
 │   └── 📁 utils/             # Model management utilities
 ├── 📁 tests/                 # Comprehensive test suite
 ├── 📁 CSVs/                  # CSV files for batch downloads
-├── 🐍 download.py            # Main CLI interface
-├── 🐍 preprocess.py          # Standalone URL preprocessor
+├── 🐍 download.py            # Main CLI interface (civitai-download)
+├── 🐍 preprocess.py          # Standalone URL preprocessor (civitai-preprocess)
 ├── 🐍 run_tests.py           # Test runner with coverage
 ├── ⚙️ config.json           # User configuration
+├── 📄 pyproject.toml         # Package metadata and commands
 ├── 📄 requirements.txt       # Dependencies
 └── 📄 requirements-test.txt  # Test dependencies
 ```
@@ -223,7 +242,7 @@ SrNo,Model_ID,Model_Name,Model_URL
 3,67890,Model with ID Only,67890
 ```
 
-**Automatic CSV Generation**: Use the [CivitAI DownloadLink Extractor](https://github.com/deepratnaawale/CivitAI-DownloadLink-Extractor) to automatically generate CSV files.
+**Automatic CSV Generation**: Use the [CivitAI DownloadLink Extractor](https://github.com/deepratna-awale/CivitAI-DownloadLink-Extractor) to automatically generate CSV files.
 
 ## ⚙️ Configuration
 
@@ -278,7 +297,7 @@ python run_tests.py --install
 python run_tests.py --verbose
 
 # Direct pytest execution
-python -m pytest tests/ -v --cov=src
+python -m pytest tests/ -v --cov=civitai_downloader
 ```
 
 **Test Coverage:**
@@ -291,19 +310,18 @@ python -m pytest tests/ -v --cov=src
 ## 🔧 Development
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.9+
 - pip or conda
 - Git
 
 ### Setup Development Environment
 ```bash
 # Clone repository
-git clone https://github.com/deepratnaawale/CivitAI-Model-Downloader.git
+git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
 cd CivitAI-Model-Downloader
 
 # Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-test.txt
+pip install -e ".[test]"
 
 # Run tests
 python run_tests.py
@@ -320,7 +338,7 @@ python run_tests.py
 
 ### Local Installation
 ```bash
-git clone https://github.com/deepratnaawale/CivitAI-Model-Downloader.git
+git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
 cd CivitAI-Model-Downloader
 pip install -r requirements.txt
 python download.py --sd /path/to/stable-diffusion --api-key your-api-key
@@ -329,7 +347,7 @@ python download.py --sd /path/to/stable-diffusion --api-key your-api-key
 ### RunPod/Cloud Deployment
 ```bash
 # In Jupyter Lab terminal
-git clone https://github.com/deepratnaawale/CivitAI-Model-Downloader.git
+git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
 cd CivitAI-Model-Downloader
 python download.py --sd /workspace/stable-diffusion-webui --api-key your-api-key
 ```
@@ -338,10 +356,9 @@ python download.py --sd /workspace/stable-diffusion-webui --api-key your-api-key
 ```dockerfile
 FROM python:3.11-slim
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
 COPY . .
-CMD ["python", "download.py", "--help"]
+RUN pip install .
+CMD ["civitai-download", "--help"]
 ```
 
 ## 🤝 Contributing
@@ -366,7 +383,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/deepratnaawale/CivitAI-Model-Downloader/issues)
+- **Issues**: [GitHub Issues](https://github.com/deepratna-awale/CivitAI-Model-Downloader/issues)
 ---
 
 ⭐ **Star this repository if you find it useful!**

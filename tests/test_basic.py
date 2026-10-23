@@ -9,11 +9,11 @@ from pathlib import Path
 def test_imports():
     """Test that all modules can be imported"""
     try:
-        from src.config.manager import ConfigManager
-        from src.api.client import CivitAIApiClient
-        from src.preprocess.preprocessor import URLPreprocessor
-        from src.utils.model_manager import ModelManager, CSVProcessor
-        from src.downloader.file_downloader import FileDownloader, ProgressManager
+        from civitai_downloader.config.manager import ConfigManager
+        from civitai_downloader.api.client import CivitAIApiClient
+        from civitai_downloader.preprocess.preprocessor import URLPreprocessor
+        from civitai_downloader.utils.model_manager import ModelManager, CSVProcessor
+        from civitai_downloader.downloader.file_downloader import FileDownloader, ProgressManager
         assert True, "All imports successful"
     except ImportError as e:
         assert False, f"Import failed: {e}"
@@ -21,7 +21,7 @@ def test_imports():
 
 def test_basic_functionality():
     """Test basic functionality without external dependencies"""
-    from src.config.manager import ConfigManager
+    from civitai_downloader.config.manager import ConfigManager
     
     # Test config manager can be created
     config_manager = ConfigManager()
@@ -37,7 +37,7 @@ def test_basic_functionality():
 
 def test_url_patterns():
     """Test URL pattern matching"""
-    from src.preprocess.preprocessor import URLPreprocessor
+    from civitai_downloader.preprocess.preprocessor import URLPreprocessor
     
     preprocessor = URLPreprocessor()
     
@@ -54,7 +54,7 @@ def test_url_patterns():
 
 def test_csv_processor_basic():
     """Test CSV processor with basic functionality"""
-    from src.utils.model_manager import CSVProcessor
+    from civitai_downloader.utils.model_manager import CSVProcessor
     import tempfile
     from pathlib import Path
     
@@ -78,13 +78,13 @@ def test_project_structure():
     project_root = Path(__file__).parent.parent
     
     # Check main directories exist
-    assert (project_root / "src").exists(), "src directory missing"
+    assert (project_root / "civitai_downloader").exists(), "civitai_downloader package missing"
     assert (project_root / "tests").exists(), "tests directory missing"
     
     # Check main modules exist
     src_modules = ["config", "api", "preprocess", "utils", "downloader"]
     for module in src_modules:
-        module_path = project_root / "src" / module
+        module_path = project_root / "civitai_downloader" / module
         assert module_path.exists(), f"Module {module} missing"
         assert (module_path / "__init__.py").exists(), f"Module {module} missing __init__.py"
 

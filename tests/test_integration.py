@@ -8,11 +8,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock
 
-from src.config.manager import ConfigManager
-from src.api.client import CivitAIApiClient
-from src.downloader.file_downloader import FileDownloader, ProgressManager
-from src.utils.model_manager import ModelManager
-from src.preprocess.preprocessor import URLPreprocessor
+from civitai_downloader.config.manager import ConfigManager
+from civitai_downloader.api.client import CivitAIApiClient
+from civitai_downloader.downloader.file_downloader import FileDownloader, ProgressManager
+from civitai_downloader.utils.model_manager import ModelManager
+from civitai_downloader.preprocess.preprocessor import URLPreprocessor
 
 
 class TestIntegration:
@@ -136,7 +136,7 @@ class TestIntegration:
         with open(csv_path, 'w') as f:
             f.write(csv_content)
         
-        from src.utils.model_manager import CSVProcessor
+        from civitai_downloader.utils.model_manager import CSVProcessor
         models = CSVProcessor.read_model_csv(csv_path)
         
         # Should handle the edge cases appropriately
