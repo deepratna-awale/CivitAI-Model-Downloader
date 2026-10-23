@@ -102,6 +102,7 @@ python download.py --help
 | `--preprocess` | Preprocess URLs before downloading | `False` |
 | `--url`, `--urls` | Download one or more models from CivitAI URLs, model IDs or names | None |
 | `--url-file` | Text file with one URL/ID/name per line (`#` comments allowed) | None |
+| `--expression-loras` | Download the AutoExpress expression LoRAs into the LoRA folder, optionally only for some base models (`pony`, `illustrious`, `sdxl`, `sd15`, `flux`) | All when no type is given |
 | `--type` | Force every `--url` download into one model type folder (e.g. `lora`) | Detected from CivitAI |
 | `-o`, `--output` | Folder to save `--url` downloads into, with a subfolder per type, or the `--ui` layout if given (no `--sd` needed) | None |
 | `--flat` | With `--output`, skip the per-type subfolders | `False` |
@@ -187,6 +188,26 @@ A1111, Forge and reForge follow `model_paths` in `config.json`, so custom folder
 python download.py --sd ~/ComfyUI --url "https://civitai.red/models/4201" 7808
 python download.py --sd ~/sdnext --ui next --url-file my-models.txt
 ```
+
+### AutoExpress expression LoRAs
+`--expression-loras` downloads the optional expression LoRAs used by [AutoExpress](https://github.com/deepratna-awale/AutoExpress) into the LoRA folder of the chosen UI. With no value it fetches all of them; name one or more base models to fetch only those (`noobai`, `xl` and `sd1.5` work as aliases).
+
+| Model type | LoRA | Trigger | Weight | Size |
+| --- | --- | --- | --- | --- |
+| Pony | [Facial Expressions (Pony v1.0)](https://civitai.red/models/541620?modelVersionId=1815859) by EauDeNoire | `cinematic expression style` | 0.6 | 435 MB |
+| Illustrious / NoobAI | [Facial Expressions (Illu v1.0)](https://civitai.red/models/541620?modelVersionId=1815930) by EauDeNoire | `cinematic expression style` | 0.6 (skipped for anger) | 435 MB |
+| Illustrious / NoobAI | [Face Enhancer Illustrious](https://civitai.red/models/1625070?modelVersionId=1839268) by roxin282 | none | 0.5 | 217 MB |
+| SDXL | [Facial Expressions (XL v3)](https://civitai.red/models/541620?modelVersionId=761462) by EauDeNoire | `facial expression style` | 0.5 | 870 MB |
+| SD1.5 | [Facial Expressions (SD1.5)](https://civitai.red/models/541620?modelVersionId=715217) by EauDeNoire | `facial expression style` | 0.6 | 288 MB |
+| Flux | [Expression Helper 2.0](https://civitai.red/models/914282?modelVersionId=1023284) by Lara_De_Martin | none | 0.8 | 73 MB |
+
+```bash
+civitai-download --expression-loras --sd ~/ComfyUI
+civitai-download --expression-loras pony illustrious --sd ~/stable-diffusion-webui
+civitai-download --expression-loras sdxl -o ./models --ui forge
+```
+
+Files keep their CivitAI names, which AutoExpress recognizes. The list is a copy of `autoexpress_core/resources/expression_loras.json` from AutoExpress, bundled at `civitai_downloader/resources/expression_loras.json`.
 
 ### URL Preprocessing
 Convert any CivitAI URL format to proper download URLs:

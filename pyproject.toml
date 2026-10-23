@@ -44,6 +44,9 @@ Issues = "https://github.com/deepratna-awale/civitai-bulk-downloader/issues"
 [tool.setuptools.packages.find]
 include = ["civitai_downloader*"]
 
+[tool.setuptools.package-data]
+civitai_downloader = ["resources/*.json"]
+
 [tool.setuptools.dynamic]
 version = { attr = "civitai_downloader.__version__" }
 
