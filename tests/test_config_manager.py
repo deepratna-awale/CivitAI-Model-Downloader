@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-from src.config.manager import ConfigManager
+from civitai_downloader.config.manager import ConfigManager
 
 
 class TestConfigManager:

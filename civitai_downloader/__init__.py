@@ -2,6 +2,8 @@
 CivitAI Model Downloader - Source Package
 """
 
+__version__ = "1.0.0"
+
 from .config.manager import ConfigManager
 from .api.client import CivitAIApiClient
 from .downloader.file_downloader import FileDownloader

@@ -8,7 +8,7 @@ import shutil
 import pytest
 from aiohttp import web
 
-from src.downloader.file_downloader import FileDownloader, ProgressManager
+from civitai_downloader.downloader.file_downloader import FileDownloader, ProgressManager
 
 
 CONTENT = bytes(range(256)) * 400  # 102400 bytes

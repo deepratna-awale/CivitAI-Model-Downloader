@@ -7,7 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from pathlib import Path
 
-from src.preprocess.preprocessor import URLPreprocessor
+from civitai_downloader.preprocess.preprocessor import URLPreprocessor
 
 
 class TestURLPreprocessor:

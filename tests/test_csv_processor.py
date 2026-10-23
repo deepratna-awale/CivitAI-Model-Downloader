@@ -7,7 +7,7 @@ import csv
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from src.utils.model_manager import CSVProcessor, ModelManager
+from civitai_downloader.utils.model_manager import CSVProcessor, ModelManager
 
 
 class TestCSVProcessor:

@@ -221,7 +221,7 @@ pytest tests/ -v -s
 pytest tests/test_config_manager.py::test_specific -v -s --pdb
 
 # Show test coverage
-pytest tests/ --cov=src --cov-report=html
+pytest tests/ --cov=civitai_downloader --cov-report=html
 ```
 
 ## Continuous Integration

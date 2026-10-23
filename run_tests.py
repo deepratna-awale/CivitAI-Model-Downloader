@@ -38,7 +38,7 @@ def run_tests(test_type="all", verbose=False, coverage=True):
         cmd.append("-v")
     
     if coverage:
-        cmd.extend(["--cov=src", "--cov-report=term-missing"])
+        cmd.extend(["--cov=civitai_downloader", "--cov-report=term-missing"])
     
     if test_type == "unit":
         cmd.append("-m")
