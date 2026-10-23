@@ -38,8 +38,8 @@ civitai-download = "civitai_downloader.cli:run"
 civitai-preprocess = "civitai_downloader.preprocess_cli:run"
 
 [project.urls]
-Homepage = "https://github.com/deepratna-awale/CivitAI-Model-Downloader"
-Issues = "https://github.com/deepratna-awale/CivitAI-Model-Downloader/issues"
+Homepage = "https://github.com/deepratna-awale/civitai-bulk-downloader"
+Issues = "https://github.com/deepratna-awale/civitai-bulk-downloader/issues"
 
 [tool.setuptools.packages.find]
 include = ["civitai_downloader*"]

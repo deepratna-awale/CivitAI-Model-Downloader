@@ -1,4 +1,4 @@
-# CivitAI Model Downloader
+# CivitAI Bulk Downloader
 
 A professional, async multi-threaded downloader for CivitAI models with intelligent URL preprocessing, comprehensive testing, and CLI automation support.
 
@@ -20,21 +20,21 @@ A professional, async multi-threaded downloader for CivitAI models with intellig
 
 Install it as a command with pip:
 ```bash
-pip install git+https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
+pip install git+https://github.com/deepratna-awale/civitai-bulk-downloader.git
 ```
 
 This adds two commands, `civitai-download` (the downloader, same options as `python download.py`) and `civitai-preprocess` (the standalone URL preprocessor). `python -m civitai_downloader` works too. `config.json`, the `CSVs` folder and `downloads.log` are read from and written to the directory you run the command in.
 
 Or run it from a clone:
 ```bash
-git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
-cd CivitAI-Model-Downloader
+git clone https://github.com/deepratna-awale/civitai-bulk-downloader.git
+cd civitai-bulk-downloader
 pip install -r requirements.txt
 ```
 
 To use it from another Python project, add it as a dependency (for example in `requirements.txt`):
 ```
-civitai-bulk-downloader @ git+https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
+civitai-bulk-downloader @ git+https://github.com/deepratna-awale/civitai-bulk-downloader.git
 ```
 and import it with `from civitai_downloader import CivitAIApiClient, FileDownloader, URLPreprocessor`.
 
@@ -213,7 +213,7 @@ python download.py --preprocess --api-key your-api-key
 ## 📂 Project Structure
 
 ```
-CivitAI-Model-Downloader/
+civitai-bulk-downloader/
 ├── 📁 civitai_downloader/     # Source package (installed by pip)
 │   ├── 📁 api/               # CivitAI API client
 │   ├── 📁 config/            # Configuration management
@@ -317,8 +317,8 @@ python -m pytest tests/ -v --cov=civitai_downloader
 ### Setup Development Environment
 ```bash
 # Clone repository
-git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
-cd CivitAI-Model-Downloader
+git clone https://github.com/deepratna-awale/civitai-bulk-downloader.git
+cd civitai-bulk-downloader
 
 # Install dependencies
 pip install -e ".[test]"
@@ -338,8 +338,8 @@ python run_tests.py
 
 ### Local Installation
 ```bash
-git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
-cd CivitAI-Model-Downloader
+git clone https://github.com/deepratna-awale/civitai-bulk-downloader.git
+cd civitai-bulk-downloader
 pip install -r requirements.txt
 python download.py --sd /path/to/stable-diffusion --api-key your-api-key
 ```
@@ -347,8 +347,8 @@ python download.py --sd /path/to/stable-diffusion --api-key your-api-key
 ### RunPod/Cloud Deployment
 ```bash
 # In Jupyter Lab terminal
-git clone https://github.com/deepratna-awale/CivitAI-Model-Downloader.git
-cd CivitAI-Model-Downloader
+git clone https://github.com/deepratna-awale/civitai-bulk-downloader.git
+cd civitai-bulk-downloader
 python download.py --sd /workspace/stable-diffusion-webui --api-key your-api-key
 ```
 
@@ -383,7 +383,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/deepratna-awale/CivitAI-Model-Downloader/issues)
+- **Issues**: [GitHub Issues](https://github.com/deepratna-awale/civitai-bulk-downloader/issues)
 ---
 
 ⭐ **Star this repository if you find it useful!**
