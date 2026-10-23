@@ -15,6 +15,7 @@ import aiohttp
 from loguru import logger
 
 from .config.ui_presets import detect_ui, normalize_ui
+from .expression_loras import EXPRESSION_MODEL_TYPES, expression_loras_for, normalize_expression_type
 from . import ConfigManager, CivitAIApiClient, FileDownloader, ModelManager, URLPreprocessor, preprocess_urls, process_single_url
 
 # UI names accepted by --ui (see civitai_downloader/config/ui_presets.py for the folder layouts)
@@ -28,6 +29,16 @@ def ui_name(value: str) -> str:
             f"unknown UI '{value}' (choose from {', '.join(UI_CHOICES)})"
         )
     return ui
+
+
+def expression_type(value: str) -> str:
+    """argparse type for --ae-expression-loras: accepts base model types and aliases (e.g. 'noobai', 'sd1.5')"""
+    model_type = normalize_expression_type(value)
+    if not model_type:
+        raise argparse.ArgumentTypeError(
+            f"unknown model type '{value}' (choose from {', '.join(EXPRESSION_MODEL_TYPES)})"
+        )
+    return model_type
 
 
 def format_size(num_bytes: int) -> str:
@@ -64,6 +75,8 @@ Examples:
   %(prog)s --url URL1 URL2 --sd ~/ComfyUI --ui comfyui
   %(prog)s --url-file my-models.txt --output ~/Downloads/models
   %(prog)s --url "https://civitai.red/models/4201/realistic-vision" --resolve-only
+  %(prog)s --sd ~/ComfyUI --ae-expression-loras
+  %(prog)s --ae-expression-loras pony illustrious --sd ~/stable-diffusion-webui
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -125,6 +138,17 @@ Examples:
         metavar="FILE",
         help="Text file with one URL/ID/name per line to download (blank lines and lines "
              "starting with # are ignored). Can be combined with --url"
+    )
+    
+    parser.add_argument(
+        "--ae-expression-loras", "--expression-loras",
+        dest="expression_loras",
+        nargs="*",
+        type=expression_type,
+        metavar="MODEL_TYPE",
+        help="Download the AutoExpress expression LoRAs into the LoRA folder. Optionally limit "
+             f"them to base model types ({', '.join(EXPRESSION_MODEL_TYPES)}); all are "
+             "downloaded when none are given. Can be combined with --url"
     )
     
     parser.add_argument(
@@ -559,14 +583,29 @@ class CivitAIDownloaderCLI:
                 unique_urls.append(url)
         return unique_urls
     
+    def collect_expression_loras(self) -> list:
+        """Expression LoRAs selected with --ae-expression-loras (empty when the flag is absent)"""
+        model_types = getattr(self.args, 'expression_loras', None)
+        if model_types is None:
+            return []
+        loras = expression_loras_for(model_types)
+        types_label = ', '.join(dict.fromkeys(model_types)) if model_types else 'all model types'
+        print(f"\n🎭 AutoExpress expression LoRAs ({types_label}):")
+        for lora in loras:
+            trigger = f"trigger '{lora['trigger']}'" if lora.get('trigger') else "no trigger"
+            print(f"  • [{lora['model_type']}] {lora['title']} ({trigger}, weight {lora['weight']})")
+        return loras
+    
     async def download_urls(self, urls: list, main_path: Optional[Path] = None,
-                            output_dir: Optional[Path] = None) -> tuple:
+                            output_dir: Optional[Path] = None,
+                            forced_types: Optional[dict] = None) -> tuple:
         """
         Resolve URLs and download each model
         
         Each model is sorted into its type folder: under output_dir when given
         (or directly into it with --flat), otherwise the configured folder
-        under the Stable Diffusion path.
+        under the Stable Diffusion path. forced_types maps a URL to the model
+        type folder it must go into regardless of --type or CivitAI's metadata.
         """
         logger.info(f"Downloading {len(urls)} model(s) from URL")
         print(f"\n🔗 Resolving {len(urls)} URL(s)...")
@@ -587,8 +626,12 @@ class CivitAIDownloaderCLI:
                     failed += 1
                     continue
                 
-                model_type = (model_type_override.lower() if model_type_override
-                              else self.model_manager.model_type_key(target['model_type']))
+                if forced_types and url in forced_types:
+                    model_type = forced_types[url]
+                elif model_type_override:
+                    model_type = model_type_override.lower()
+                else:
+                    model_type = self.model_manager.model_type_key(target['model_type'])
                 if output_dir and getattr(self.args, 'ui', None) and not flat:
                     # Lay the output directory out like the chosen UI
                     download_path = self.model_manager.get_download_path(model_type, output_dir)
@@ -744,6 +787,11 @@ class CivitAIDownloaderCLI:
         
         # Handle URL downloads
         urls = self.collect_urls()
+        forced_types = {}
+        for lora in self.collect_expression_loras():
+            forced_types[lora['url']] = "lora"
+            if lora['url'] not in urls:
+                urls.append(lora['url'])
         if urls:
             if getattr(self.args, 'resolve_only', False):
                 for url in urls:
@@ -766,7 +814,7 @@ class CivitAIDownloaderCLI:
                     print("Please rerun the script with a valid --sd or --output path.")
                     return
             
-            _, failed = await self.download_urls(urls, main_path, output_dir)
+            _, failed = await self.download_urls(urls, main_path, output_dir, forced_types)
             if failed:
                 sys.exit(1)
             return
